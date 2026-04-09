@@ -1,0 +1,46 @@
+You can think of this system as a data pipeline with three main stages: Extraction, Aggregation, and Calculation.
+
+Stage 1: Extraction (Parsing the Exams)
+Files Used: CAT QP 1- PH0 (1).docx, CAT QP- PH0 2 (1).docx
+Script Used: 01_qp_processing.py
+
+What happens: The system needs to know which questions belong to which Course Outcomes (COs) and what their maximum marks are.
+
+The Process: The Python script opens the Word documents and scans the tables. It extracts the metadata (Course Code, Academic Year) and maps out the blueprint of the exam. For example, it learns from CAT QP 1 that Part A, Question 1 is worth 3 marks and maps to CO1.
+
+The Output: It creates a foundational spreadsheet that acts as a structural blueprint, linking every question to its corresponding CO.
+
+Stage 2: Aggregation (Mapping Marks to COs)
+Files Used: Cross platform -CAT 1, Cross platform-CAT 2, Cross platform -Ass 1, Cross platform -Ass 2
+Script Used: 02_assessment_aggregator.py
+
+What happens: You have folders full of raw student marks from different tests and assignments. The system needs to organize these raw numbers into the CO categories extracted in Stage 1.
+
+The Process: The script takes the master CO ATTAINMENT TEMPLATE (1).xlsx and begins injecting data. It reads row-by-row through the mark uploads. If student "AKASH R" scored a 2 on Q1 in CAT 1, the script places that "2" precisely into the CO1 column of the master template. It also applies the business rule forcing assignment columns to dynamically scale to a total of 40 marks.
+
+The Output: A fully populated CO_ATTAINMENT_FINAL.xlsx where every student's mark from every assessment is perfectly aligned under the correct CO header.
+
+Stage 3: Calculation (The Final Attainment)
+Files Used: CO_ATTAINMENT_FINAL.xlsx (from Stage 2) + Terminal Marks
+Script Used: 03_final_attainment.py
+
+What happens: The college requires a final attainment percentage based on a 70/30 weightage (Internal vs. Terminal) and specific performance thresholds.
+
+The Process: The script creates "Sheet2" and writes Excel formulas directly into the cells. It calculates the =0.7*Internal + 0.3*Terminal score for each student. Then, it uses the Expected Performance (EP) and Constraint values (e.g., passing threshold) to calculate how many students achieved the target. Finally, it caps the relative attainment at 100% using the Expected Level of Attainment (ELA).
+
+The Output: The final, official attainment report ready for academic audit.
+
+The Future Structure: Transitioning to the Web App
+File Used: CO_Attainment_Automation_System_Design.pdf
+
+The provided design document outlines the exact roadmap for taking these standalone Python scripts and turning them into a centralized web platform for the faculty.
+
+The architecture described in the PDF—a React frontend client layered over a Node.js/Express backend, potentially utilizing Firebase—will feel very familiar. The structure heavily mirrors the stacks utilized in developing platforms like AQRO and TCE-Connect.
+
+In this new structure:
+
+Frontend (React): Faculty will log into a dashboard, select a subject, and upload the DOCX and CSV files through drag-and-drop interfaces.
+
+Backend (Node.js): Instead of running the Python scripts manually in a terminal, the Node server will receive the files and trigger the Python processing engine in the background as a microservice.
+
+Database/Storage: The processed templates and final Excel reports are saved securely and served back to the React frontend for the staff to download instantly, alongside visual analytics of the class's performance.

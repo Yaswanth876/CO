@@ -1,0 +1,308 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+@import "tailwindcss";
+
+/* ─── Keyframes ───────────────────────────────────────────────── */
+@keyframes fade-slide-up {
+	from {
+		opacity: 0;
+		transform: translateY(24px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes fade-slide-right {
+	0% {
+		opacity: 0;
+		transform: translateX(-120px);
+	}
+	70% {
+		opacity: 1;
+		transform: translateX(10px);
+	}
+	100% {
+		opacity: 1;
+		transform: translateX(0);
+	}
+}
+
+@keyframes gentle-float {
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-8px);
+	}
+}
+
+@keyframes sheen {
+	0% {
+		transform: translateX(-120%);
+	}
+	100% {
+		transform: translateX(220%);
+	}
+}
+
+@keyframes progress-fill {
+	from {
+		width: 0%;
+	}
+}
+
+@keyframes pulse-ring {
+	0% {
+		transform: scale(1);
+		opacity: 0.6;
+	}
+	100% {
+		transform: scale(1.5);
+		opacity: 0;
+	}
+}
+
+@keyframes spin-smooth {
+	from {
+		transform: rotate(0deg);
+	}
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@keyframes status-pop {
+	0% {
+		transform: scale(0.6);
+		opacity: 0;
+	}
+	70% {
+		transform: scale(1.15);
+	}
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+
+/* ─── Base ─────────────────────────────────────────────────────── */
+*, *::before, *::after {
+	box-sizing: border-box;
+}
+
+html {
+	font-family: "Inter", system-ui, sans-serif;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	scroll-behavior: smooth;
+}
+
+body {
+	background-color: #f8f9fb;
+}
+
+/* ─── Login animations ─────────────────────────────────────────── */
+.login-animate-brand {
+	animation: fade-slide-right 0.8s ease-out both;
+}
+
+.login-animate-card {
+	animation: fade-slide-up 0.7s ease-out 0.12s both;
+}
+
+.login-animate-stagger-1 {
+	animation: fade-slide-up 0.6s ease-out 0.2s both;
+}
+
+.login-animate-stagger-2 {
+	animation: fade-slide-up 0.6s ease-out 0.3s both;
+}
+
+.login-animate-stagger-3 {
+	animation: fade-slide-up 0.6s ease-out 0.4s both;
+}
+
+.login-logo-float {
+	animation: gentle-float 3s ease-in-out infinite;
+}
+
+/* ─── Login input ──────────────────────────────────────────────── */
+.login-input-motion {
+	transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease;
+}
+
+.login-input-motion:focus-within {
+	border-color: #b91c1c;
+	box-shadow: 0 0 0 4px rgba(185, 28, 28, 0.12);
+	transform: translateY(-1px);
+}
+
+/* ─── Login button ─────────────────────────────────────────────── */
+.login-button-motion {
+	position: relative;
+	overflow: hidden;
+	border: 1px solid transparent;
+	box-shadow: 0 10px 20px -14px rgba(127, 29, 29, 0.95);
+	transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.login-button-motion:hover {
+	transform: translateY(-2px);
+	border-color: rgba(255, 255, 255, 0.45);
+	box-shadow: 0 16px 26px -14px rgba(127, 29, 29, 0.95);
+}
+
+.login-button-motion:active {
+	transform: translateY(0);
+	box-shadow: 0 8px 16px -12px rgba(127, 29, 29, 0.9);
+}
+
+.login-button-motion::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 36%;
+	height: 100%;
+	background: linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0));
+	transform: translateX(-140%);
+	transition: transform 0.45s ease;
+}
+
+.login-button-motion:hover::after {
+	animation: sheen 0.85s ease-out 1;
+}
+
+.login-button-motion:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 4px rgba(185, 28, 28, 0.2), 0 10px 20px -14px rgba(127, 29, 29, 0.95);
+}
+
+/* ─── Interactive button utilities ─────────────────────────────── */
+.btn-press {
+	transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.btn-press:hover:not(:disabled) {
+	transform: translateY(-1px);
+	box-shadow: 0 6px 18px -8px rgba(127, 29, 29, 0.5);
+}
+
+.btn-press:active:not(:disabled) {
+	transform: translateY(0) scale(0.98);
+	box-shadow: none;
+}
+
+/* ─── Progress bar ─────────────────────────────────────────────── */
+.progress-bar-fill {
+	transition: width 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ─── Upload row ───────────────────────────────────────────────── */
+.upload-row {
+	transition: background-color 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.upload-row:hover {
+	border-color: #fca5a5;
+	box-shadow: 0 4px 14px -6px rgba(127, 29, 29, 0.18);
+	transform: translateY(-1px);
+}
+
+.upload-row.uploaded {
+	border-color: #bbf7d0;
+	background-color: #f0fdf4;
+}
+
+/* ─── Status badge animations ──────────────────────────────────── */
+.status-badge {
+	animation: status-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ─── Card hover utilities ─────────────────────────────────────── */
+.card-hover {
+	transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+		box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+		border-color 0.2s ease;
+}
+
+.card-hover:hover {
+	transform: translateY(-3px);
+	box-shadow: 0 22px 44px -28px rgba(127, 29, 29, 0.5);
+	border-color: rgba(252, 165, 165, 0.6);
+}
+
+/* ─── Section accordion ─────────────────────────────────────────── */
+.section-chevron {
+	transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.section-chevron.open {
+	transform: rotate(180deg);
+}
+
+/* ─── Sidebar transitions ───────────────────────────────────────── */
+.sidebar-link {
+	transition: background-color 0.18s ease, color 0.18s ease,
+		padding-left 0.18s ease;
+}
+
+/* ─── Input focus micro-interaction ────────────────────────────── */
+.input-focus-motion {
+	transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.input-focus-motion:focus {
+	transform: translateY(-1px);
+	box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.1);
+}
+
+/* ─── Spinner ───────────────────────────────────────────────────── */
+.spinner {
+	animation: spin-smooth 0.8s linear infinite;
+}
+
+/* ─── Step indicator ────────────────────────────────────────────── */
+.step-badge {
+	transition: background-color 0.3s ease, color 0.3s ease, transform 0.3s ease;
+}
+
+.step-badge.active {
+	transform: scale(1.1);
+}
+
+/* ─── Navbar ─────────────────────────────────────────────────────── */
+.navbar-blur {
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	background-color: rgba(255, 255, 255, 0.92);
+}
+
+/* ─── Reduced motion ─────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+	.login-animate-brand,
+	.login-animate-card,
+	.login-animate-stagger-1,
+	.login-animate-stagger-2,
+	.login-animate-stagger-3,
+	.login-logo-float,
+	.login-button-motion,
+	.login-button-motion::after,
+	.spinner,
+	.status-badge {
+		animation: none !important;
+	}
+
+	.login-input-motion,
+	.btn-press,
+	.card-hover,
+	.upload-row,
+	.progress-bar-fill,
+	.section-chevron,
+	.input-focus-motion,
+	.step-badge {
+		transition: none !important;
+	}
+}

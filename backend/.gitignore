@@ -1,0 +1,39 @@
+# Python / Virtual Environment
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Temp files
+temp_ocr.png
+temp.png
+
+# Logs
+*.log
+
+# Test data
+test_*.xlsx
+test_*.docx
+
+# Output files (too large to commit)
+/outputs/
+/uploads/
+*.xlsx
+*.docx
