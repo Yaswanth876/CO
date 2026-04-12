@@ -264,16 +264,17 @@ export default function ParameterSection({
                   </motion.button>
                 </motion.div>
 
-                <div className="pt-2">
+                <div className="pt-2 pb-3">
                   <button
                     type="button"
-                    className="btn-press inline-flex items-center gap-2 rounded-md bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/40 disabled:opacity-50"
+                    className="btn-press inline-flex items-center gap-2 rounded-md bg-[#6f1d1b] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#571715] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6f1d1b]/40 disabled:opacity-50"
                     onClick={() => onGenerateFinal?.(values)}
                     disabled={!completed || !isValid || !canGenerateFinal || isGeneratingFinal}
                   >
                     {isGeneratingFinal ? "Generating..." : "Generate End-sem Report"}
                   </button>
                 </div>
+
               </CardContent>
             </motion.div>
           )}

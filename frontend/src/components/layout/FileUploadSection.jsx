@@ -35,8 +35,6 @@ const stageUploadFields = [
     files: [
       { key: "TERMINAL_QP", label: "Terminal Question Paper (.docx)" },
       { key: "TERMINAL", label: "Terminal Marksheet (.xlsx)" },
-      { key: "CAT1_REPORT", label: "CAT 1 Report (.xlsx)" },
-      { key: "CAT2_REPORT", label: "CAT 2 Report (.xlsx)" },
     ],
   },
 ];
@@ -290,7 +288,7 @@ export default function FileUploadSection({
                       })}
 
                       {group.stage !== "End-sem" ? (
-                        <div className="flex items-center gap-3 pt-1">
+                        <div className="flex items-center gap-3 pt-1 pb-3">
                           <Button
                             className="btn-press min-w-[220px]"
                             onClick={() => handleGenerateStage(group.stage)}

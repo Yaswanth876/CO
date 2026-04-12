@@ -7,8 +7,8 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 
-const { Subject, IntermediateOutput } = require('../models');
-const { fileExists } = require('../utils/fileManager');
+const { Subject, File, IntermediateOutput, ProcessingLog, Configuration } = require('../models');
+const { fileExists, deleteFile } = require('../utils/fileManager');
 
 /**
  * GET /api/reports/:subject_id
@@ -171,6 +171,80 @@ router.get('/download/:subject_id/:output_type', async (req, res, next) => {
 
     const filename = `${output_type}_${subject_id}_${Date.now()}.xlsx`;
     res.download(output.file_path, filename);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/reports/clear-process/:subject_id
+ * Clear generated outputs and reset report-generation state for a subject.
+ */
+router.post('/clear-process/:subject_id', async (req, res, next) => {
+  try {
+    const { subject_id } = req.params;
+    const userId = req.user.id;
+
+    const subject = await Subject.findOne({
+      where: { id: subject_id, user_id: userId }
+    });
+
+    if (!subject) {
+      return res.status(404).json({ error: 'Subject not found' });
+    }
+
+    const outputs = await IntermediateOutput.findAll({
+      where: { subject_id }
+    });
+
+    for (const output of outputs) {
+      if (output.file_path && fileExists(output.file_path)) {
+        try {
+          fs.unlinkSync(output.file_path);
+        } catch (error) {
+          // Ignore missing/delete failures and continue cleaning metadata.
+        }
+      }
+    }
+
+    await IntermediateOutput.destroy({
+      where: { subject_id }
+    });
+
+    const uploadedFiles = await File.findAll({
+      where: { subject_id }
+    });
+
+    for (const file of uploadedFiles) {
+      if (file.file_path) {
+        deleteFile(file.file_path);
+      }
+    }
+
+    await File.destroy({
+      where: { subject_id }
+    });
+
+    await ProcessingLog.destroy({
+      where: { subject_id }
+    });
+
+    const configuration = await Configuration.findOne({
+      where: { subject_id }
+    });
+
+    if (configuration) {
+      await configuration.destroy();
+    }
+
+    subject.current_phase = 0;
+    subject.status = 'active';
+    await subject.save();
+
+    res.json({
+      status: 'success',
+      message: 'Process cleared successfully'
+    });
   } catch (error) {
     next(error);
   }

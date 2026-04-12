@@ -7,6 +7,7 @@ import { pageVariants, containerVariants, sectionVariants } from "../lib/animati
 import {
   ensureSubject,
   downloadReportFileByOutputId,
+  clearReportProcess,
   getConfiguration,
   getSubjectReports,
   getSubjectStatus,
@@ -33,10 +34,10 @@ const workflowSteps = [
 const stageFiles = {
   1: ["CAT1_QP", "CAT1_MARKS", "ASS1"],
   2: ["CAT2_QP", "CAT2_MARKS", "ASS2"],
-  3: ["TERMINAL_QP", "TERMINAL", "CAT1_REPORT", "CAT2_REPORT"],
+  3: ["TERMINAL_QP", "TERMINAL"],
 };
 
-const allUploadKeys = Object.values(stageFiles).flat();
+const endUploadKeys = stageFiles[3];
 
 function getActiveStage(files = {}) {
   const earlyComplete = stageFiles[1].every((key) => files[key]);
@@ -59,6 +60,7 @@ export default function SubjectWorkspace({ user }) {
   const [subjects, setSubjects] = useState([]);
   const [subjectId, setSubjectId] = useState(null);
   const [generatingFinal, setGeneratingFinal] = useState(false);
+  const [clearingProcess, setClearingProcess] = useState(false);
   const [openSections, setOpenSections] = useState({
     upload: true,
     parameter: false,
@@ -73,7 +75,7 @@ export default function SubjectWorkspace({ user }) {
       semester: "Semester",
     };
   const activeStage = getActiveStage(uploadedFiles);
-  const uploadSectionCompleted = allUploadKeys.every((key) => uploadedFiles[key]);
+  const uploadSectionCompleted = endUploadKeys.every((key) => uploadedFiles[key]);
 
   const endFilesReady = stageFiles[3].every((key) => uploadedFiles[key]);
 
@@ -116,6 +118,36 @@ export default function SubjectWorkspace({ user }) {
     }
   }
 
+  async function handleClearProcess() {
+    if (!subjectId) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Are you sure you want to clear the process for this subject? This will remove uploaded files, saved parameters, and generated outputs."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setClearingProcess(true);
+    setSaveMessage("");
+
+    try {
+      await clearReportProcess(subjectId);
+      setUploadedFiles({});
+      setParameters({});
+      setStep(1);
+      setOpenSections({ upload: true, parameter: false });
+      setSaveMessage("Process cleared successfully.");
+    } catch (error) {
+      setSaveMessage(error.message || "Failed to clear the process.");
+    } finally {
+      setClearingProcess(false);
+    }
+  }
+
   useEffect(() => {
     async function loadSubjects() {
       try {
@@ -149,8 +181,6 @@ export default function SubjectWorkspace({ user }) {
           ASS2: status.files?.some((file) => file.file_type === "ASS2") || false,
           TERMINAL_QP: status.files?.some((file) => file.file_type === "TERMINAL_QP") || false,
           TERMINAL: status.files?.some((file) => file.file_type === "TERMINAL") || false,
-          CAT1_REPORT: status.files?.some((file) => file.file_type === "CAT1_REPORT") || false,
-          CAT2_REPORT: status.files?.some((file) => file.file_type === "CAT2_REPORT") || false,
         };
         setUploadedFiles(nextUploaded);
 
@@ -256,7 +286,7 @@ export default function SubjectWorkspace({ user }) {
                   }}
                   transition={{ duration: 0.3 }}
                 >
-                  {isCompleted ? "?" : item.id}
+                  {item.id}
                 </motion.span>
                 <span className="font-medium leading-tight">{item.label}</span>
 
@@ -349,6 +379,17 @@ export default function SubjectWorkspace({ user }) {
           }}
           onGenerateFinal={handleGenerateFinal}
         />
+
+        <div>
+          <button
+            type="button"
+            className="btn-press inline-flex items-center gap-2 rounded-md bg-red-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/40 disabled:opacity-50"
+            onClick={handleClearProcess}
+            disabled={clearingProcess || generatingFinal}
+          >
+            {clearingProcess ? "Clearing..." : "Clear the process"}
+          </button>
+        </div>
 
         {saveMessage ? <p className="text-xs text-slate-500">{saveMessage}</p> : null}
       </motion.div>

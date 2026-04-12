@@ -206,24 +206,6 @@ router.post('/finalize', async (req, res, next) => {
       return res.status(400).json({ error: 'Terminal question paper file not found' });
     }
 
-    const cat1ReportFile = await File.findOne({
-      where: { subject_id, file_type: 'CAT1_REPORT' },
-      order: [['created_at', 'DESC'], ['id', 'DESC']]
-    });
-
-    const cat2ReportFile = await File.findOne({
-      where: { subject_id, file_type: 'CAT2_REPORT' },
-      order: [['created_at', 'DESC'], ['id', 'DESC']]
-    });
-
-    if (!cat1ReportFile || !fileExists(cat1ReportFile.file_path)) {
-      return res.status(400).json({ error: 'CAT 1 report file not found' });
-    }
-
-    if (!cat2ReportFile || !fileExists(cat2ReportFile.file_path)) {
-      return res.status(400).json({ error: 'CAT 2 report file not found' });
-    }
-
     // Get Terminal file
     const terminalFile = await File.findOne({
       where: { subject_id, file_type: 'TERMINAL', processing_status: 'pending' }

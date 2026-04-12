@@ -154,9 +154,6 @@ function mapUploadRoute(fileType) {
     return "/api/phase3/upload-terminal-qp";
   }
 
-  if (fileType === "CAT1_REPORT" || fileType === "CAT2_REPORT") {
-    return "/api/phase3/upload-report";
-  }
 
   return "/api/phase2/upload";
 }
@@ -166,7 +163,7 @@ export async function uploadWorkspaceFile(subjectId, subjectCode, fileType, file
   const formData = new FormData();
   formData.append("subject_id", String(subjectId));
   formData.append("subject_code", subjectCode);
-  if (!["CAT1_QP", "CAT1_MARKS", "ASS1", "TERMINAL", "TERMINAL_QP", "CAT1_REPORT", "CAT2_REPORT"].includes(fileType)) {
+    if (!["CAT1_QP", "CAT1_MARKS", "ASS1", "TERMINAL", "TERMINAL_QP"].includes(fileType)) {
     formData.append("file_type", fileType);
   }
   formData.append("file", file);
@@ -210,7 +207,15 @@ export function saveConfiguration(subjectId, payload) {
 }
 
 export function getConfiguration(subjectId) {
-  return request(`/api/configuration/${subjectId}`).then((data) => data.configuration);
+  return request(`/api/configuration/${subjectId}`)
+    .then((data) => data.configuration)
+    .catch((error) => {
+      if (error.message.includes("404")) {
+        return null;
+      }
+
+      throw error;
+    });
 }
 
 export function processPhase1(subjectId) {
@@ -236,6 +241,12 @@ export function processPhase3(subjectId) {
   return request("/api/phase3/finalize", {
     method: "POST",
     body: JSON.stringify({ subject_id: subjectId }),
+  });
+}
+
+export function clearReportProcess(subjectId) {
+  return request(`/api/reports/clear-process/${subjectId}`, {
+    method: "POST",
   });
 }
 
