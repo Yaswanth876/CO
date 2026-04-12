@@ -175,8 +175,22 @@ async function runStage2(qpExcelPath, studentDbPath) {
 /**
  * Run Stage 3: Master Template Consolidation
  */
-async function runStage3(templatePath, cat1Path, cat2Path, ass1Path, ass2Path, outputPath) {
+async function runStage3(templatePath, cat1Path, cat2Path, ass1Path, ass2Path, outputPath, phase) {
+  if (typeof templatePath === 'object' && templatePath !== null) {
+    const options = templatePath;
+    return runPythonStage('stage3_consolidate.py', {
+      phase: options.phase,
+      template_path: options.templatePath ?? options.template_path,
+      cat1_path: options.cat1Path ?? options.cat1_path,
+      cat2_path: options.cat2Path ?? options.cat2_path,
+      ass1_path: options.ass1Path ?? options.ass1_path,
+      ass2_path: options.ass2Path ?? options.ass2_path,
+      output_path: options.outputPath ?? options.output_path,
+    });
+  }
+
   return runPythonStage('stage3_consolidate.py', {
+    phase,
     template_path: templatePath,
     cat1_path: cat1Path,
     cat2_path: cat2Path,
@@ -189,8 +203,22 @@ async function runStage3(templatePath, cat1Path, cat2Path, ass1Path, ass2Path, o
 /**
  * Run Stage 4: Final CO Attainment Calculation
  */
-async function runStage4(coAttainmentPath, terminalPath, outputPath, ep, constraint, ela) {
+async function runStage4(coAttainmentPath, terminalPath, outputPath, ep, constraint, ela, phase) {
+  if (typeof coAttainmentPath === 'object' && coAttainmentPath !== null) {
+    const options = coAttainmentPath;
+    return runPythonStage('stage4_attainment.py', {
+      phase: options.phase,
+      co_attainment_path: options.coAttainmentPath ?? options.co_attainment_path,
+      terminal_path: options.terminalPath ?? options.terminal_path,
+      output_path: options.outputPath ?? options.output_path,
+      ep: parseFloat(options.ep),
+      constraint: parseFloat(options.constraint),
+      ela: options.ela
+    });
+  }
+
   return runPythonStage('stage4_attainment.py', {
+    phase,
     co_attainment_path: coAttainmentPath,
     terminal_path: terminalPath,
     output_path: outputPath,

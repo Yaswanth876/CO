@@ -20,7 +20,16 @@ const EMPTY_VALUES = {
   },
 };
 
-export default function ParameterSection({ isOpen, completed, onComplete, onToggle, initialValues }) {
+export default function ParameterSection({
+  isOpen,
+  completed,
+  onComplete,
+  onToggle,
+  initialValues,
+  onGenerateFinal,
+  canGenerateFinal,
+  isGeneratingFinal,
+}) {
   const [values, setValues] = useState(EMPTY_VALUES);
   const [touched, setTouched] = useState(false);
 
@@ -254,6 +263,17 @@ export default function ParameterSection({ isOpen, completed, onComplete, onTogg
                     <ArrowRight size={15} />
                   </motion.button>
                 </motion.div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    className="btn-press inline-flex items-center gap-2 rounded-md bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/40 disabled:opacity-50"
+                    onClick={() => onGenerateFinal?.(values)}
+                    disabled={!completed || !isValid || !canGenerateFinal || isGeneratingFinal}
+                  >
+                    {isGeneratingFinal ? "Generating..." : "Generate End-sem Report"}
+                  </button>
+                </div>
               </CardContent>
             </motion.div>
           )}

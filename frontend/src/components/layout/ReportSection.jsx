@@ -1,4 +1,4 @@
-import { FileSpreadsheet, Loader2, CheckCircle2 } from "lucide-react";
+import { FileSpreadsheet, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "../ui/button";
@@ -7,88 +7,49 @@ import { Input } from "../ui/input";
 import { cardVariants } from "../../lib/animations";
 import {
   downloadReportFileByOutputId,
-  getReports,
-  processPhase1,
-  processPhase2,
-  processPhase3,
+  getSubjectReports,
 } from "../../lib/api";
 
 export default function ReportSection({
   completed,
-  uploadedFiles,
-  parametersCompleted,
-  onGenerated,
   subjectId,
   subjectCode,
   templatePath,
   onTemplatePathChange,
 }) {
-  const requiredFiles = 7;
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generated, setGenerated] = useState(false);
   const [message, setMessage] = useState("");
-
-  const uploadedCount = Object.values(uploadedFiles || {}).filter(Boolean).length;
-  const allUploaded = uploadedCount === requiredFiles;
   const hasTemplatePath = Boolean(templatePath?.trim());
-  const canGenerate =
-    allUploaded &&
-    parametersCompleted &&
-    hasTemplatePath &&
-    !isGenerating &&
-    !generated &&
-    !!subjectId;
 
-  const statusMessage = generated
-    ? "Report generated successfully and downloaded."
-    : canGenerate
-    ? "Upload and parameter steps are complete. You can generate the report."
-    : !allUploaded
-    ? `Upload all files to enable report generation (${uploadedCount}/7 uploaded)`
-    : !hasTemplatePath
-    ? "Enter the Stage 3 template path to enable report generation."
-    : "Complete the parameter section to enable report generation.";
+  async function downloadLatestReportByType(outputType, fallbackName) {
+    const reports = await getSubjectReports(subjectId);
+    const target = reports.find((report) => report.type === outputType);
 
-  async function handleGenerate() {
-    if (!canGenerate) {
-      return;
+    if (!target?.id) {
+      throw new Error(`No ${fallbackName} is available for download yet.`);
     }
+
+    const { blob } = await downloadReportFileByOutputId(target.id, outputType);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${subjectCode}_${fallbackName}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleDownloadOnly(outputType, fallbackName) {
     if (!subjectId || !subjectCode) {
       setMessage("Please log in again.");
       return;
     }
 
-    setIsGenerating(true);
-    setMessage("");
-
     try {
-      await processPhase1(subjectId);
-      await processPhase2(subjectId, templatePath);
-      await processPhase3(subjectId);
-
-      const reports = await getReports();
-      const subjectReport = reports.find((report) => report.subjectId === subjectId);
-      if (!subjectReport?.outputId) {
-        throw new Error("Final report was generated but could not be located for download.");
-      }
-
-      const { blob } = await downloadReportFileByOutputId(subjectReport.outputId, subjectReport.outputType);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${subjectCode}_OFFICIAL_REPORT.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      setGenerated(true);
-      setMessage("Report generated and downloaded.");
-      onGenerated?.();
+      await downloadLatestReportByType(outputType, fallbackName);
+      setMessage(`${fallbackName.replaceAll("_", " ")} downloaded.`);
     } catch (error) {
-      setMessage(error.message || "Failed to generate report.");
-    } finally {
-      setIsGenerating(false);
+      setMessage(error.message || "Download failed.");
     }
   }
 
@@ -100,7 +61,7 @@ export default function ReportSection({
             <FileSpreadsheet size={18} />
             Report Generation Section
             <AnimatePresence>
-              {(completed || generated) && (
+              {completed && (
                 <motion.span
                   className="ml-2 flex items-center gap-1 text-xs text-emerald-700"
                   initial={{ opacity: 0, scale: 0.7 }}
@@ -119,74 +80,60 @@ export default function ReportSection({
         <CardContent className="space-y-5">
           <AnimatePresence mode="wait">
             <motion.p
-              key={statusMessage}
-              className={`text-sm ${
-                generated ? "text-emerald-700 font-medium" : "text-slate-500"
-              }`}
+              key={String(hasTemplatePath)}
+              className="text-sm text-slate-500"
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.25 }}
             >
-              {statusMessage}
+              Generate actions are available inside each semester upload block.
+              Use this section for template path and downloading generated reports.
             </motion.p>
           </AnimatePresence>
 
-          <AnimatePresence>
-            {isGenerating && (
-              <motion.div
-                className="space-y-2"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-              >
-                <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <Loader2 size={14} className="spinner text-red-700" />
-                  Processing files and computing CO attainment...
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                  <motion.div
-                    className="h-full rounded-full bg-gradient-to-r from-red-700 to-red-400"
-                    initial={{ width: "0%" }}
-                    animate={{ width: "100%" }}
-                    transition={{ duration: 1.6, ease: "easeInOut" }}
-                  />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-slate-700">
-                Generate CO Attainment Report
-              </p>
-              <p className="text-xs text-slate-500">
-                This will process uploaded files and compute final CO attainment.
-              </p>
+          <div className="space-y-5">
+            <div className="space-y-3 rounded-lg border border-red-100 p-4">
+              <p className="text-sm font-semibold text-slate-800">Early-sem</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => handleDownloadOnly("EARLY_SEM_REPORT", "EARLY_SEM_FEEDBACK")}
+                >
+                  Download Early-sem Feedback
+                </Button>
+              </div>
             </div>
 
-            <motion.div whileTap={canGenerate ? { scale: 0.97 } : {}}>
-              <Button
-                className="btn-press min-w-[200px]"
-                onClick={handleGenerate}
-                disabled={!canGenerate}
-              >
-                {isGenerating ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 size={14} className="spinner" />
-                    Generating...
-                  </span>
-                ) : generated ? (
-                  <span className="flex items-center gap-2">
-                    <CheckCircle2 size={14} />
-                    Report Generated
-                  </span>
-                ) : (
-                  "Generate Report"
-                )}
-              </Button>
-            </motion.div>
+            <div className="space-y-3 rounded-lg border border-red-100 p-4">
+              <p className="text-sm font-semibold text-slate-800">Mid-sem</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => handleDownloadOnly("MID_SEM_REPORT", "MID_SEM_REPORT")}
+                >
+                  Download Mid-sem Report
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded-lg border border-red-100 p-4">
+              <p className="text-sm font-semibold text-slate-800">End-sem</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => handleDownloadOnly("EARLY_SEM_REPORT", "EARLY_SEM_REPORT")}
+                >
+                  Download CAT 1 Report
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleDownloadOnly("MID_SEM_REPORT", "MID_SEM_REPORT")}
+                >
+                  Download CAT 2 Report
+                </Button>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -199,9 +146,7 @@ export default function ReportSection({
               onChange={(event) => onTemplatePathChange?.(event.target.value)}
               className="input-focus-motion"
             />
-            {!hasTemplatePath ? (
-              <p className="text-xs text-red-600">Template path is required for Phase 2 processing.</p>
-            ) : null}
+            {!hasTemplatePath ? <p className="text-xs text-red-600">Template path is required for Mid-sem report generation.</p> : null}
           </div>
 
           {message ? <p className="text-xs text-slate-600">{message}</p> : null}

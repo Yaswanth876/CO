@@ -1,11 +1,15 @@
 """
-Stage 3: Master Template Consolidation (CAT1, CAT2, ASS1, ASS2 → Template)
+Stage 3: Incremental Master Template Consolidation.
 
-Consolidates 4 processed assessment Excel files into CO Attainment Master Template.
+Supported phases:
+- early: template + CAT1 + ASS1 -> output
+- mid: existing output + CAT2 + ASS2 -> output
+- end: no new consolidation; validate output exists
 """
 
-import sys
 import json
+import os
+import sys
 from openpyxl import load_workbook
 from utils import validate_file_exists, normalize_question_id, clean_numeric
 
@@ -143,40 +147,120 @@ def process_assignment(
         template_ws.cell(row=7, column=template_start_col + idx).value = val
 
 
+def resolve_default_template_path():
+    """Resolve default template path from common project locations."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(script_dir, "..", "data", "CO ATTAINMENT TEMPLATE (1).xlsx"),
+        os.path.join(script_dir, "data", "CO ATTAINMENT TEMPLATE (1).xlsx"),
+        os.path.join("data", "CO ATTAINMENT TEMPLATE (1).xlsx"),
+    ]
+
+    for candidate in candidates:
+        normalized = os.path.normpath(candidate)
+        if os.path.exists(normalized):
+            return normalized
+
+    return None
+
+
+def require_path(path_value, key_name):
+    if not path_value:
+        raise ValueError(f"Missing required path: {key_name}")
+    return path_value
+
+
+def load_workbook_for_phase(phase, template_path, output_path):
+    if phase == "early":
+        source = require_path(template_path, "template_path")
+        validate_file_exists(source)
+        return load_workbook(source)
+
+    if phase == "mid":
+        source = require_path(output_path, "output_path")
+        validate_file_exists(source)
+        return load_workbook(source)
+
+    if phase == "end":
+        source = require_path(output_path, "output_path")
+        validate_file_exists(source)
+        return None
+
+    raise ValueError("Invalid phase. Expected one of: early, mid, end")
+
+
 def main():
     try:
-        # Parse arguments
+        if len(sys.argv) < 2:
+            raise ValueError("Missing JSON argument payload")
+
         args = json.loads(sys.argv[1])
-        template_path = args["template_path"]
-        cat1_path = args["cat1_path"]
-        cat2_path = args["cat2_path"]
-        ass1_path = args["ass1_path"]
-        ass2_path = args["ass2_path"]
-        output_path = args["output_path"]
 
-        # Validate inputs
-        for path in [template_path, cat1_path, cat2_path, ass1_path, ass2_path]:
-            validate_file_exists(path)
+        phase_raw = args.get("phase")
+        phase = str(phase_raw).strip().lower() if phase_raw is not None else None
+        output_path = require_path(args.get("output_path"), "output_path")
 
-        # Load template
-        template_wb = load_workbook(template_path)
-        template_ws = template_wb.worksheets[1]  # SECOND sheet (index 1)
+        template_path = args.get("template_path") or resolve_default_template_path()
+        cat1_path = args.get("cat1_path")
+        cat2_path = args.get("cat2_path")
+        ass1_path = args.get("ass1_path")
+        ass2_path = args.get("ass2_path")
 
-        # Process CAT files
-        # CAT1: columns 5-25, CAT2: columns 27-46
-        process_cat(cat1_path, template_ws, 5, 25)
-        process_cat(cat2_path, template_ws, 27, 46)
+        if phase is None:
+            # Backward-compatible legacy behavior: process all four files at once.
+            validate_file_exists(require_path(template_path, "template_path"))
+            validate_file_exists(require_path(cat1_path, "cat1_path"))
+            validate_file_exists(require_path(cat2_path, "cat2_path"))
+            validate_file_exists(require_path(ass1_path, "ass1_path"))
+            validate_file_exists(require_path(ass2_path, "ass2_path"))
 
-        # Process assignment files
-        # ASS1: columns 56-61, ASS2: columns 64-69
-        # Source starts at column 7 (G) in assignment files
-        process_assignment(ass1_path, template_ws, source_start_col=7, template_start_col=56)
-        process_assignment(ass2_path, template_ws, source_start_col=7, template_start_col=64)
+            template_wb = load_workbook(template_path)
+            template_ws = template_wb.worksheets[1]  # SECOND sheet (index 1)
 
-        # Save
-        template_wb.save(output_path)
+            process_cat(cat1_path, template_ws, 5, 25)
+            process_cat(cat2_path, template_ws, 27, 46)
+            process_assignment(ass1_path, template_ws, source_start_col=7, template_start_col=56)
+            process_assignment(ass2_path, template_ws, source_start_col=7, template_start_col=64)
 
-        # Return success
+            template_wb.save(output_path)
+
+        elif phase == "early":
+            validate_file_exists(require_path(cat1_path, "cat1_path"))
+            validate_file_exists(require_path(ass1_path, "ass1_path"))
+
+            template_wb = load_workbook_for_phase(phase, template_path, output_path)
+            template_ws = template_wb.worksheets[1]  # SECOND sheet (index 1)
+
+            # CAT1: columns 5-25
+            process_cat(cat1_path, template_ws, 5, 25)
+
+            # ASS1: columns 56-61 (source starts at column 7)
+            process_assignment(ass1_path, template_ws, source_start_col=7, template_start_col=56)
+
+            template_wb.save(output_path)
+
+        elif phase == "mid":
+            validate_file_exists(require_path(cat2_path, "cat2_path"))
+            validate_file_exists(require_path(ass2_path, "ass2_path"))
+
+            template_wb = load_workbook_for_phase(phase, template_path, output_path)
+            template_ws = template_wb.worksheets[1]  # SECOND sheet (index 1)
+
+            # CAT2: columns 27-46
+            process_cat(cat2_path, template_ws, 27, 46)
+
+            # ASS2: columns 64-69 (source starts at column 7)
+            process_assignment(ass2_path, template_ws, source_start_col=7, template_start_col=64)
+
+            template_wb.save(output_path)
+
+        elif phase == "end":
+            # Stage 3 bypass for end-sem; just validate that progressive file exists.
+            load_workbook_for_phase(phase, template_path, output_path)
+
+        else:
+            raise ValueError("Invalid phase. Expected one of: early, mid, end")
+
         print(json.dumps({"status": "ok", "output_path": output_path}))
 
     except Exception as e:

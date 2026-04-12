@@ -12,10 +12,113 @@ const { runStage4 } = require('../utils/pythonExecutor');
 const { fileExists, getFileSizeMB, deleteFile } = require('../utils/fileManager');
 const { updateSubjectPhase } = require('../utils/phaseTracker');
 
+function createReportUploadHandler(fileType) {
+  return async (req, res, next) => {
+    try {
+      const { subject_id } = req.body;
+      const userId = req.user.id;
+
+      if (!subject_id || !req.file) {
+        return res.status(400).json({ error: 'Subject ID and file required' });
+      }
+
+      const subject = await Subject.findOne({
+        where: { id: subject_id, user_id: userId }
+      });
+
+      if (!subject) {
+        return res.status(404).json({ error: 'Subject not found' });
+      }
+
+      const fileSizeMB = getFileSizeMB(req.file.path);
+
+      const fileRecord = await File.create({
+        subject_id,
+        file_type: fileType,
+        original_filename: req.file.originalname,
+        stored_filename: req.file.filename,
+        file_path: req.file.path,
+        file_size: fileSizeMB,
+        uploaded_by: userId,
+        processing_status: 'success'
+      });
+
+      res.status(201).json({
+        status: 'success',
+        file: {
+          id: fileRecord.id,
+          file_type: fileRecord.file_type,
+          stored_filename: fileRecord.stored_filename,
+          file_size: fileSizeMB,
+          processing_status: 'success'
+        }
+      });
+    } catch (error) {
+      if (req.file) deleteFile(req.file.path);
+      next(error);
+    }
+  };
+}
+
 /**
  * POST /api/phase3/upload-terminal
  * Upload Terminal Marks
  */
+router.post('/upload-terminal-qp', uploadErrorHandler, async (req, res, next) => {
+  try {
+    const { subject_id } = req.body;
+    const userId = req.user.id;
+
+    if (!subject_id || !req.file) {
+      return res.status(400).json({ error: 'Subject ID and file required' });
+    }
+
+    const subject = await Subject.findOne({
+      where: { id: subject_id, user_id: userId }
+    });
+
+    if (!subject) {
+      return res.status(404).json({ error: 'Subject not found' });
+    }
+
+    const fileSizeMB = getFileSizeMB(req.file.path);
+
+    const fileRecord = await File.create({
+      subject_id,
+      file_type: 'TERMINAL_QP',
+      original_filename: req.file.originalname,
+      stored_filename: req.file.filename,
+      file_path: req.file.path,
+      file_size: fileSizeMB,
+      uploaded_by: userId,
+      processing_status: 'success'
+    });
+
+    res.status(201).json({
+      status: 'success',
+      file: {
+        id: fileRecord.id,
+        file_type: fileRecord.file_type,
+        stored_filename: fileRecord.stored_filename,
+        file_size: fileSizeMB,
+        processing_status: 'success'
+      }
+    });
+  } catch (error) {
+    if (req.file) deleteFile(req.file.path);
+    next(error);
+  }
+});
+
+router.post('/upload-report', uploadErrorHandler, async (req, res, next) => {
+  const fileType = req.body.file_type;
+  if (!['CAT1_REPORT', 'CAT2_REPORT'].includes(fileType)) {
+    return res.status(400).json({ error: 'Invalid file type. Must be CAT1_REPORT or CAT2_REPORT' });
+  }
+
+  return createReportUploadHandler(fileType)(req, res, next);
+});
+
 router.post('/upload-terminal', uploadErrorHandler, async (req, res, next) => {
   try {
     const { subject_id } = req.body;
@@ -81,13 +184,44 @@ router.post('/finalize', async (req, res, next) => {
       return res.status(404).json({ error: 'Subject not found' });
     }
 
-    // Verify Phase 2 is complete
+    // Verify Mid-sem report is complete
     const phase2Output = await IntermediateOutput.findOne({
-      where: { subject_id, output_type: 'CO_ATTAINMENT_FINAL', is_latest: true }
+      where: {
+        subject_id,
+        output_type: { [require('sequelize').Op.in]: ['MID_SEM_REPORT', 'CO_ATTAINMENT_FINAL'] }
+      },
+      order: [['created_at', 'DESC'], ['id', 'DESC']]
     });
 
     if (!phase2Output) {
-      return res.status(400).json({ error: 'Phase 2 must be completed first' });
+      return res.status(400).json({ error: 'Mid-sem report must be completed first' });
+    }
+
+    const terminalQpFile = await File.findOne({
+      where: { subject_id, file_type: 'TERMINAL_QP' },
+      order: [['created_at', 'DESC'], ['id', 'DESC']]
+    });
+
+    if (!terminalQpFile || !fileExists(terminalQpFile.file_path)) {
+      return res.status(400).json({ error: 'Terminal question paper file not found' });
+    }
+
+    const cat1ReportFile = await File.findOne({
+      where: { subject_id, file_type: 'CAT1_REPORT' },
+      order: [['created_at', 'DESC'], ['id', 'DESC']]
+    });
+
+    const cat2ReportFile = await File.findOne({
+      where: { subject_id, file_type: 'CAT2_REPORT' },
+      order: [['created_at', 'DESC'], ['id', 'DESC']]
+    });
+
+    if (!cat1ReportFile || !fileExists(cat1ReportFile.file_path)) {
+      return res.status(400).json({ error: 'CAT 1 report file not found' });
+    }
+
+    if (!cat2ReportFile || !fileExists(cat2ReportFile.file_path)) {
+      return res.status(400).json({ error: 'CAT 2 report file not found' });
     }
 
     // Get Terminal file
@@ -129,14 +263,15 @@ router.post('/finalize', async (req, res, next) => {
 
     let stage4Result;
     try {
-      stage4Result = await runStage4(
-        phase2Output.file_path,
-        terminalFile.file_path,
-        finalOutput,
+      stage4Result = await runStage4({
+        phase: 'end',
+        coAttainmentPath: phase2Output.file_path,
+        terminalPath: terminalFile.file_path,
+        outputPath: finalOutput,
         ep,
         constraint,
         ela
-      );
+      });
     } catch (error) {
       throw new Error(`Stage 4 failed: ${error.error || error.message}`);
     }
@@ -153,7 +288,8 @@ router.post('/finalize', async (req, res, next) => {
       subject_id,
       stage_number: 4,
       output_type: 'CO_ATTAINMENT_COMPLETE',
-      file_path: finalOutput
+      file_path: finalOutput,
+      is_latest: true
     });
 
     // Update phase

@@ -3,13 +3,15 @@ import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import FileUploadSection from "../components/layout/FileUploadSection";
 import ParameterSection from "../components/layout/ParameterSection";
-import ReportSection from "../components/layout/ReportSection";
 import { pageVariants, containerVariants, sectionVariants } from "../lib/animations";
 import {
   ensureSubject,
+  downloadReportFileByOutputId,
   getConfiguration,
+  getSubjectReports,
   getSubjectStatus,
   getSubjects,
+  processPhase3,
   saveConfiguration,
 } from "../lib/api";
 
@@ -23,11 +25,31 @@ const subjectCatalog = {
 };
 
 const workflowSteps = [
-  { id: 1, label: "Upload Files" },
-  { id: 2, label: "Set Parameters" },
-  { id: 3, label: "Generate Report" },
-  { id: 4, label: "Download" },
+  { id: 1, label: "Early-sem" },
+  { id: 2, label: "Mid-sem" },
+  { id: 3, label: "End-sem" },
 ];
+
+const stageFiles = {
+  1: ["CAT1_QP", "CAT1_MARKS", "ASS1"],
+  2: ["CAT2_QP", "CAT2_MARKS", "ASS2"],
+  3: ["TERMINAL_QP", "TERMINAL", "CAT1_REPORT", "CAT2_REPORT"],
+};
+
+const allUploadKeys = Object.values(stageFiles).flat();
+
+function getActiveStage(files = {}) {
+  const earlyComplete = stageFiles[1].every((key) => files[key]);
+  const midComplete = stageFiles[2].every((key) => files[key]);
+
+  if (!earlyComplete) {
+    return 1;
+  }
+  if (!midComplete) {
+    return 2;
+  }
+  return 3;
+}
 
 export default function SubjectWorkspace({ user }) {
   const [uploadedFiles, setUploadedFiles] = useState({});
@@ -36,7 +58,7 @@ export default function SubjectWorkspace({ user }) {
   const [saveMessage, setSaveMessage] = useState("");
   const [subjects, setSubjects] = useState([]);
   const [subjectId, setSubjectId] = useState(null);
-  const [templatePath, setTemplatePath] = useState("");
+  const [generatingFinal, setGeneratingFinal] = useState(false);
   const [openSections, setOpenSections] = useState({
     upload: true,
     parameter: false,
@@ -50,6 +72,49 @@ export default function SubjectWorkspace({ user }) {
       name: "Subject Name",
       semester: "Semester",
     };
+  const activeStage = getActiveStage(uploadedFiles);
+  const uploadSectionCompleted = allUploadKeys.every((key) => uploadedFiles[key]);
+
+  const endFilesReady = stageFiles[3].every((key) => uploadedFiles[key]);
+
+  async function downloadLatestReportByType(outputType, fallbackName) {
+    const reports = await getSubjectReports(subjectId);
+    const target = reports.find((report) => report.type === outputType);
+
+    if (!target?.id) {
+      throw new Error(`No ${fallbackName} is available for download yet.`);
+    }
+
+    const { blob } = await downloadReportFileByOutputId(target.id, outputType);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${resolvedSubjectCode}_${fallbackName}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleGenerateFinal() {
+    if (!subjectId || !subjectCode || !endFilesReady) {
+      return;
+    }
+
+    setGeneratingFinal(true);
+    setSaveMessage("");
+
+    try {
+      await processPhase3(subjectId);
+      await downloadLatestReportByType("CO_ATTAINMENT_COMPLETE", "END_SEM_REPORT");
+      setStep(4);
+      setSaveMessage("End-sem report generated and downloaded.");
+    } catch (error) {
+      setSaveMessage(error.message || "Failed to generate end-sem report.");
+    } finally {
+      setGeneratingFinal(false);
+    }
+  }
 
   useEffect(() => {
     async function loadSubjects() {
@@ -74,9 +139,6 @@ export default function SubjectWorkspace({ user }) {
         const subject = await ensureSubject(subjectCode);
         setSubjectId(subject.id);
 
-        const savedTemplatePath = localStorage.getItem(`coas-template-path-${subjectCode}`) || "";
-        setTemplatePath(savedTemplatePath);
-
         const status = await getSubjectStatus(subject.id);
         const nextUploaded = {
           CAT1_QP: status.files?.some((file) => file.file_type === "CAT1_QP") || false,
@@ -85,7 +147,10 @@ export default function SubjectWorkspace({ user }) {
           CAT2_MARKS: status.files?.some((file) => file.file_type === "CAT2_MARKS") || false,
           ASS1: status.files?.some((file) => file.file_type === "ASS1") || false,
           ASS2: status.files?.some((file) => file.file_type === "ASS2") || false,
+          TERMINAL_QP: status.files?.some((file) => file.file_type === "TERMINAL_QP") || false,
           TERMINAL: status.files?.some((file) => file.file_type === "TERMINAL") || false,
+          CAT1_REPORT: status.files?.some((file) => file.file_type === "CAT1_REPORT") || false,
+          CAT2_REPORT: status.files?.some((file) => file.file_type === "CAT2_REPORT") || false,
         };
         setUploadedFiles(nextUploaded);
 
@@ -131,14 +196,6 @@ export default function SubjectWorkspace({ user }) {
     bootstrapSubjectWorkspace();
   }, [subjectCode]);
 
-  useEffect(() => {
-    if (!subjectCode) {
-      return;
-    }
-
-    localStorage.setItem(`coas-template-path-${subjectCode}`, templatePath || "");
-  }, [subjectCode, templatePath]);
-
   return (
     <motion.div
       className="space-y-6 p-4 md:p-6"
@@ -160,7 +217,7 @@ export default function SubjectWorkspace({ user }) {
           </h1>
           <p className="mt-1 text-sm font-medium text-slate-600">{details.semester}</p>
           <p className="mt-2 text-sm text-slate-600">
-            Upload assessment files, configure CO parameters, generate attainment reports, and download outputs.
+            Manage Early-sem, Mid-sem, and End-sem files, configure CO parameters, and download stage reports.
           </p>
         </div>
       </motion.div>
@@ -171,8 +228,8 @@ export default function SubjectWorkspace({ user }) {
       >
         <ol className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {workflowSteps.map((item) => {
-            const isActive = step === item.id;
-            const isCompleted = step > item.id;
+            const isActive = activeStage === item.id;
+            const isCompleted = activeStage > item.id;
 
             return (
               <motion.li
@@ -224,7 +281,7 @@ export default function SubjectWorkspace({ user }) {
       >
         <FileUploadSection
           isOpen={openSections.upload}
-          completed={step > 1}
+          completed={uploadSectionCompleted}
           uploadedFiles={uploadedFiles}
           user={user}
           subjectId={subjectId}
@@ -239,7 +296,7 @@ export default function SubjectWorkspace({ user }) {
             setUploadedFiles(files);
             let nextStep = step;
 
-            if (Object.values(files).filter(Boolean).length === 7 && nextStep < 2) {
+            if (Object.values(files).filter(Boolean).length === 8 && nextStep < 2) {
               nextStep = 2;
             }
 
@@ -271,6 +328,8 @@ export default function SubjectWorkspace({ user }) {
               parameter: !prev.parameter,
             }))
           }
+          canGenerateFinal={endFilesReady && step >= 3 && !!subjectId}
+          isGeneratingFinal={generatingFinal}
           onComplete={(values) => {
             if (!subjectId) {
               setSaveMessage("Subject is not ready yet. Please try again.");
@@ -279,10 +338,6 @@ export default function SubjectWorkspace({ user }) {
 
             setParameters(values);
             setStep(3);
-            setOpenSections((prev) => ({
-              ...prev,
-              parameter: false,
-            }));
 
             saveConfiguration(subjectId, {
               ep: values.ep,
@@ -292,19 +347,7 @@ export default function SubjectWorkspace({ user }) {
               .then(() => setSaveMessage("Parameters saved."))
               .catch((error) => setSaveMessage(error.message || "Failed to save parameters."));
           }}
-        />
-
-        <ReportSection
-          completed={step > 3}
-          subjectId={subjectId}
-          subjectCode={resolvedSubjectCode}
-          templatePath={templatePath}
-          onTemplatePathChange={setTemplatePath}
-          uploadedFiles={uploadedFiles}
-          parametersCompleted={step >= 3}
-          onGenerated={() => {
-            setStep(4);
-          }}
+          onGenerateFinal={handleGenerateFinal}
         />
 
         {saveMessage ? <p className="text-xs text-slate-500">{saveMessage}</p> : null}

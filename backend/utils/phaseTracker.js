@@ -39,11 +39,14 @@ async function getSubjectStatus(subjectId) {
   phase2.completed = phase2.cat2_qp && phase2.cat2_marks && phase2.ass1 && phase2.ass2;
 
   const phase3 = {
+    terminal_qp: files.some(f => f.file_type === 'TERMINAL_QP' && f.processing_status === 'success'),
     terminal: files.some(f => f.file_type === 'TERMINAL' && f.processing_status === 'success'),
+    cat1_report: files.some(f => f.file_type === 'CAT1_REPORT' && f.processing_status === 'success'),
+    cat2_report: files.some(f => f.file_type === 'CAT2_REPORT' && f.processing_status === 'success'),
     configuration_set: !!subject.configuration,
     completed: false
   };
-  phase3.completed = phase3.terminal && phase3.configuration_set;
+  phase3.completed = phase3.terminal_qp && phase3.terminal && phase3.cat1_report && phase3.cat2_report && phase3.configuration_set;
 
   return {
     subject_id: subject.id,
@@ -105,7 +108,10 @@ function getNextRequiredFile(status, targetPhase) {
     if (!status.phase2.ass1) return 'ASS1';
     if (!status.phase2.ass2) return 'ASS2';
   } else if (targetPhase === 3) {
+    if (!status.phase3.terminal_qp) return 'TERMINAL_QP';
     if (!status.phase3.terminal) return 'TERMINAL';
+    if (!status.phase3.cat1_report) return 'CAT1_REPORT';
+    if (!status.phase3.cat2_report) return 'CAT2_REPORT';
     if (!status.phase3.configuration_set) return 'CONFIGURATION';
   }
   return null;
@@ -120,7 +126,7 @@ async function validatePhaseFiles(subjectId, phase) {
     ? ['cat1_qp', 'cat1_marks']
     : phase === 2
       ? ['cat2_qp', 'cat2_marks', 'ass1', 'ass2']
-      : ['terminal', 'configuration_set'];
+      : ['terminal_qp', 'terminal', 'cat1_report', 'cat2_report', 'configuration_set'];
 
   const phaseData = phase === 1 ? status.phase1 : phase === 2 ? status.phase2 : status.phase3;
 

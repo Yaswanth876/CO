@@ -142,8 +142,20 @@ function mapUploadRoute(fileType) {
     return "/api/phase1/upload-marks";
   }
 
+  if (fileType === "ASS1") {
+    return "/api/phase1/upload-assignment";
+  }
+
   if (fileType === "TERMINAL") {
     return "/api/phase3/upload-terminal";
+  }
+
+  if (fileType === "TERMINAL_QP") {
+    return "/api/phase3/upload-terminal-qp";
+  }
+
+  if (fileType === "CAT1_REPORT" || fileType === "CAT2_REPORT") {
+    return "/api/phase3/upload-report";
   }
 
   return "/api/phase2/upload";
@@ -154,7 +166,7 @@ export async function uploadWorkspaceFile(subjectId, subjectCode, fileType, file
   const formData = new FormData();
   formData.append("subject_id", String(subjectId));
   formData.append("subject_code", subjectCode);
-  if (!["CAT1_QP", "CAT1_MARKS", "TERMINAL"].includes(fileType)) {
+  if (!["CAT1_QP", "CAT1_MARKS", "ASS1", "TERMINAL", "TERMINAL_QP", "CAT1_REPORT", "CAT2_REPORT"].includes(fileType)) {
     formData.append("file_type", fileType);
   }
   formData.append("file", file);
@@ -302,6 +314,10 @@ export async function getReports() {
   }
 
   return reportRows;
+}
+
+export function getSubjectReports(subjectId) {
+  return request(`/api/reports/${subjectId}`).then((data) => data.reports || []);
 }
 
 export function logout() {

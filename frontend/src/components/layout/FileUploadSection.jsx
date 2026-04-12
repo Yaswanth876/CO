@@ -5,17 +5,43 @@ import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { collapsibleVariants, cardVariants } from "../../lib/animations";
-import { uploadWorkspaceFile } from "../../lib/api";
+import {
+  downloadReportFileByOutputId,
+  getSubjectReports,
+  processPhase1,
+  processPhase2,
+  uploadWorkspaceFile,
+} from "../../lib/api";
 
-const uploadFields = [
-  { key: "CAT1_QP", label: "CAT 1 Question Paper (.docx)" },
-  { key: "CAT1_MARKS", label: "CAT 1 Marks (.xlsx)" },
-  { key: "CAT2_QP", label: "CAT 2 Question Paper (.docx)" },
-  { key: "CAT2_MARKS", label: "CAT 2 Marks (.xlsx)" },
-  { key: "ASS1", label: "Assignment 1 Marks (.xlsx)" },
-  { key: "ASS2", label: "Assignment 2 Marks (.xlsx)" },
-  { key: "TERMINAL", label: "Terminal Marks (.xlsx)" },
+const stageUploadFields = [
+  {
+    stage: "Early-sem",
+    files: [
+      { key: "CAT1_QP", label: "CAT 1 Question Paper (.docx)" },
+      { key: "CAT1_MARKS", label: "CAT 1 Marksheet (.xlsx)" },
+      { key: "ASS1", label: "Assignment 1 Marksheet (.xlsx)" },
+    ],
+  },
+  {
+    stage: "Mid-sem",
+    files: [
+      { key: "CAT2_QP", label: "CAT 2 Question Paper (.docx)" },
+      { key: "CAT2_MARKS", label: "CAT 2 Marksheet (.xlsx)" },
+      { key: "ASS2", label: "Assignment 2 Marksheet (.xlsx)" },
+    ],
+  },
+  {
+    stage: "End-sem",
+    files: [
+      { key: "TERMINAL_QP", label: "Terminal Question Paper (.docx)" },
+      { key: "TERMINAL", label: "Terminal Marksheet (.xlsx)" },
+      { key: "CAT1_REPORT", label: "CAT 1 Report (.xlsx)" },
+      { key: "CAT2_REPORT", label: "CAT 2 Report (.xlsx)" },
+    ],
+  },
 ];
+
+const uploadFields = stageUploadFields.flatMap((group) => group.files);
 
 export default function FileUploadSection({
   isOpen,
@@ -29,10 +55,14 @@ export default function FileUploadSection({
 }) {
   const [selectedFiles, setSelectedFiles] = useState({});
   const [uploadingKey, setUploadingKey] = useState("");
+  const [generatingStage, setGeneratingStage] = useState("");
   const [uploadMessage, setUploadMessage] = useState("");
 
   const uploadedCount = Object.values(uploadedFiles).filter(Boolean).length;
   const progressPercent = (uploadedCount / uploadFields.length) * 100;
+
+  const earlyReady = ["CAT1_QP", "CAT1_MARKS", "ASS1"].every((key) => uploadedFiles?.[key]);
+  const midReady = ["CAT2_QP", "CAT2_MARKS", "ASS2"].every((key) => uploadedFiles?.[key]);
 
   const handleUpload = async (key) => {
     if (!selectedFiles[key]) {
@@ -61,6 +91,60 @@ export default function FileUploadSection({
       setUploadingKey("");
     }
   };
+
+  async function downloadLatestReportByType(outputType, fallbackName) {
+    const reports = await getSubjectReports(subjectId);
+    const target = reports.find((report) => report.type === outputType);
+
+    if (!target?.id) {
+      throw new Error(`No ${fallbackName} is available for download yet.`);
+    }
+
+    const { blob } = await downloadReportFileByOutputId(target.id, outputType);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${subjectCode}_${fallbackName}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function canGenerateStage(stage) {
+    if (stage === "Early-sem") {
+      return earlyReady && !!subjectId && generatingStage !== stage;
+    }
+    if (stage === "Mid-sem") {
+      return earlyReady && midReady && !!subjectId && generatingStage !== stage;
+    }
+    return false;
+  }
+
+  async function handleGenerateStage(stage) {
+    if (!subjectId || !subjectCode || !canGenerateStage(stage)) {
+      return;
+    }
+
+    setGeneratingStage(stage);
+    setUploadMessage("");
+
+    try {
+      if (stage === "Early-sem") {
+        await processPhase1(subjectId);
+        await downloadLatestReportByType("EARLY_SEM_REPORT", "EARLY_SEM_FEEDBACK");
+        setUploadMessage("Early-sem feedback generated and downloaded.");
+      } else if (stage === "Mid-sem") {
+        await processPhase2(subjectId);
+        await downloadLatestReportByType("MID_SEM_REPORT", "MID_SEM_REPORT");
+        setUploadMessage("Mid-sem report generated and downloaded.");
+      }
+    } catch (error) {
+      setUploadMessage(error.message || `Failed to generate ${stage} report.`);
+    } finally {
+      setGeneratingStage("");
+    }
+  }
 
   return (
     <motion.div variants={cardVariants}>
@@ -127,77 +211,106 @@ export default function FileUploadSection({
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  {uploadFields.map((item, idx) => {
-                    const isDone = !!uploadedFiles[item.key];
-                    const isUploading = uploadingKey === item.key;
+                <div className="space-y-4">
+                  {stageUploadFields.map((group, groupIdx) => (
+                    <div key={group.stage} className="space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        {group.stage}
+                      </p>
+                      {group.files.map((item, idx) => {
+                        const isDone = !!uploadedFiles[item.key];
+                        const isUploading = uploadingKey === item.key;
+                        const sequence = groupIdx * 3 + idx;
 
-                    return (
-                      <motion.div
-                        key={item.key}
-                        className={`upload-row grid gap-3 rounded-xl border p-4 shadow-sm md:grid-cols-[1.4fr_2fr_auto_auto] md:items-center ${
-                          isDone ? "uploaded" : "border-slate-200 bg-white"
-                        }`}
-                        initial={{ opacity: 0, x: -12 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: idx * 0.04, duration: 0.3 }}
-                      >
-                        <p className="text-sm font-medium text-slate-700">
-                          Upload {item.label}
-                        </p>
+                        return (
+                          <motion.div
+                            key={item.key}
+                            className={`upload-row grid gap-3 rounded-xl border p-4 shadow-sm md:grid-cols-[1.4fr_2fr_auto_auto] md:items-center ${
+                              isDone ? "uploaded" : "border-slate-200 bg-white"
+                            }`}
+                            initial={{ opacity: 0, x: -12 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: sequence * 0.04, duration: 0.3 }}
+                          >
+                            <p className="text-sm font-medium text-slate-700">
+                              Upload {item.label}
+                            </p>
 
-                        <Input
-                          type="file"
-                          className="input-focus-motion bg-slate-50 text-sm"
-                          disabled={isDone}
-                          onChange={(event) => {
-                            const file = event.target.files?.[0] || null;
-                            setSelectedFiles((prev) => ({ ...prev, [item.key]: file }));
-                          }}
-                        />
+                            <Input
+                              type="file"
+                              className="input-focus-motion bg-slate-50 text-sm"
+                              disabled={isDone}
+                              onChange={(event) => {
+                                const file = event.target.files?.[0] || null;
+                                setSelectedFiles((prev) => ({ ...prev, [item.key]: file }));
+                              }}
+                            />
 
-                        <Button
-                          className="btn-press w-full md:w-auto"
-                          onClick={() => handleUpload(item.key)}
-                          disabled={isDone || isUploading || !selectedFiles[item.key]}
-                        >
-                          {isUploading ? (
-                            <span className="flex items-center gap-2">
-                              <Loader2 size={14} className="spinner" />
-                              Uploading
-                            </span>
-                          ) : (
-                            "Upload"
-                          )}
-                        </Button>
-
-                        <AnimatePresence mode="wait">
-                          {isDone ? (
-                            <motion.span
-                              key="done"
-                              className="flex items-center gap-1 text-xs font-semibold text-emerald-600"
-                              initial={{ opacity: 0, scale: 0.6 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              exit={{ opacity: 0, scale: 0.6 }}
-                              transition={{ type: "spring", stiffness: 300, damping: 18 }}
+                            <Button
+                              className="btn-press w-full md:w-auto"
+                              onClick={() => handleUpload(item.key)}
+                              disabled={isDone || isUploading || !selectedFiles[item.key]}
                             >
-                              <CheckCircle2 size={13} />
-                              Uploaded
-                            </motion.span>
-                          ) : (
-                            <motion.span
-                              key="pending"
-                              className="text-xs font-medium text-slate-400"
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                            >
-                              Not Uploaded
-                            </motion.span>
-                          )}
-                        </AnimatePresence>
-                      </motion.div>
-                    );
-                  })}
+                              {isUploading ? (
+                                <span className="flex items-center gap-2">
+                                  <Loader2 size={14} className="spinner" />
+                                  Uploading
+                                </span>
+                              ) : (
+                                "Upload"
+                              )}
+                            </Button>
+
+                            <AnimatePresence mode="wait">
+                              {isDone ? (
+                                <motion.span
+                                  key="done"
+                                  className="flex items-center gap-1 text-xs font-semibold text-emerald-600"
+                                  initial={{ opacity: 0, scale: 0.6 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0, scale: 0.6 }}
+                                  transition={{ type: "spring", stiffness: 300, damping: 18 }}
+                                >
+                                  <CheckCircle2 size={13} />
+                                  Uploaded
+                                </motion.span>
+                              ) : (
+                                <motion.span
+                                  key="pending"
+                                  className="text-xs font-medium text-slate-400"
+                                  initial={{ opacity: 0 }}
+                                  animate={{ opacity: 1 }}
+                                >
+                                  Not Uploaded
+                                </motion.span>
+                              )}
+                            </AnimatePresence>
+                          </motion.div>
+                        );
+                      })}
+
+                      {group.stage !== "End-sem" ? (
+                        <div className="flex items-center gap-3 pt-1">
+                          <Button
+                            className="btn-press min-w-[220px]"
+                            onClick={() => handleGenerateStage(group.stage)}
+                            disabled={!canGenerateStage(group.stage)}
+                          >
+                            {generatingStage === group.stage ? (
+                              <span className="flex items-center gap-2">
+                                <Loader2 size={14} className="spinner" />
+                                Generating...
+                              </span>
+                            ) : group.stage === "Early-sem" ? (
+                              "Generate Early-sem Report"
+                            ) : (
+                              "Generate Mid-sem Report"
+                            )}
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
                 </div>
 
                 {uploadMessage ? <p className="text-xs text-slate-600">{uploadMessage}</p> : null}

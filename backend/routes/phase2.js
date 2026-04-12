@@ -1,21 +1,22 @@
 /**
- * Phase 2 Routes - CAT2, ASS1, ASS2
+ * Phase 2 Routes - CAT2 and ASS2
  */
 
 const express = require('express');
 const router = express.Router();
 const path = require('path');
+const fs = require('fs');
 const { Op } = require('sequelize');
 
-const { Subject, File, IntermediateOutput, ProcessingLog } = require('../models');
+const { Subject, File, Configuration, IntermediateOutput, ProcessingLog } = require('../models');
 const { uploadErrorHandler } = require('../middleware/upload');
-const { runStage1, runStage2, runStage3 } = require('../utils/pythonExecutor');
+const { runStage1, runStage2, runStage3, runStage4 } = require('../utils/pythonExecutor');
 const { fileExists, getFileSizeMB, deleteFile } = require('../utils/fileManager');
-const { updateSubjectPhase, validatePhaseFiles } = require('../utils/phaseTracker');
+const { updateSubjectPhase } = require('../utils/phaseTracker');
 
 /**
  * POST /api/phase2/upload
- * Upload CAT2 QP, CAT2 Marks, ASS1, or ASS2
+ * Upload CAT2 QP, CAT2 Marks, or ASS2
  */
 router.post('/upload', uploadErrorHandler, async (req, res, next) => {
   try {
@@ -26,8 +27,7 @@ router.post('/upload', uploadErrorHandler, async (req, res, next) => {
       return res.status(400).json({ error: 'Subject ID, file type, and file required' });
     }
 
-    // Validate file_type
-    const validTypes = ['CAT2_QP', 'CAT2_MARKS', 'ASS1', 'ASS2'];
+    const validTypes = ['CAT2_QP', 'CAT2_MARKS', 'ASS2'];
     if (!validTypes.includes(file_type)) {
       return res.status(400).json({ error: `Invalid file type. Must be one of: ${validTypes.join(', ')}` });
     }
@@ -71,21 +71,14 @@ router.post('/upload', uploadErrorHandler, async (req, res, next) => {
 
 /**
  * POST /api/phase2/process
- * Process Phase 2 files (CAT2 + ASS) - requires template
+ * Process mid-sem files (CAT2 + ASS2) and generate the mid-sem report
  */
 router.post('/process', async (req, res, next) => {
   const startTime = Date.now();
 
   try {
-    const { subject_id, template_path } = req.body;
+    const { subject_id } = req.body;
     const userId = req.user.id;
-
-    if (!template_path) {
-      return res.status(400).json({
-        error: 'Template path required',
-        details: 'Provide template_path in request body (absolute path to CO template .xlsx)'
-      });
-    }
 
     const subject = await Subject.findOne({
       where: { id: subject_id, user_id: userId }
@@ -95,16 +88,18 @@ router.post('/process', async (req, res, next) => {
       return res.status(404).json({ error: 'Subject not found' });
     }
 
-    // Verify Phase 1 is complete
-    const phase1Output = await IntermediateOutput.findOne({
-      where: { subject_id, output_type: 'CAT1_FINAL', is_latest: true }
+    const earlyReport = await IntermediateOutput.findOne({
+      where: {
+        subject_id,
+        output_type: { [Op.in]: ['EARLY_SEM_REPORT', 'CAT1_FINAL'] }
+      },
+      order: [['created_at', 'DESC'], ['id', 'DESC']]
     });
 
-    if (!phase1Output) {
-      return res.status(400).json({ error: 'Phase 1 must be completed first' });
+    if (!earlyReport || !fileExists(earlyReport.file_path)) {
+      return res.status(400).json({ error: 'Early-sem report must be completed first' });
     }
 
-    // Get CAT2 files (process like Phase 1)
     const cat2QpFile = await File.findOne({
       where: { subject_id, file_type: 'CAT2_QP' },
       order: [['created_at', 'DESC'], ['id', 'DESC']]
@@ -115,108 +110,155 @@ router.post('/process', async (req, res, next) => {
       order: [['created_at', 'DESC'], ['id', 'DESC']]
     });
 
-    if (cat2QpFile && cat2MarksFile && fileExists(cat2QpFile.file_path) && fileExists(cat2MarksFile.file_path)) {
-      cat2QpFile.processing_status = 'processing';
-      cat2MarksFile.processing_status = 'processing';
-      await cat2QpFile.save();
-      await cat2MarksFile.save();
-
-      // Process CAT2 through Stage 1 & 2
-      const outputsDir = process.env.OUTPUTS_DIR || './outputs';
-      const cat2QpOutput = path.join(outputsDir, `CAT2_QP_FINAL_${subject_id}_${Date.now()}.xlsx`);
-
-      const stage1 = await runStage1(cat2QpFile.file_path, cat2QpOutput);
-      if (stage1.status !== 'ok') throw new Error(`CAT2 Stage 1 failed: ${stage1.message}`);
-
-      cat2QpFile.processing_status = 'success';
-      await cat2QpFile.save();
-
-      const stage2 = await runStage2(cat2QpOutput, cat2MarksFile.file_path);
-      if (stage2.status !== 'ok') throw new Error(`CAT2 Stage 2 failed: ${stage2.message}`);
-
-      cat2MarksFile.processing_status = 'success';
-      await cat2MarksFile.save();
-
-      await IntermediateOutput.update(
-        { is_latest: false },
-        { where: { subject_id } }
-      );
-
-      await IntermediateOutput.create({
-        subject_id,
-        stage_number: 2,
-        output_type: 'CAT2_FINAL',
-        file_path: cat2QpOutput
-      });
-    } else {
-      throw new Error('CAT2 QP and Marks files required');
-    }
-
-    // Get ASS files
-    const ass1File = await File.findOne({
-      where: { subject_id, file_type: 'ASS1' },
-      order: [['created_at', 'DESC'], ['id', 'DESC']]
-    });
-
     const ass2File = await File.findOne({
       where: { subject_id, file_type: 'ASS2' },
       order: [['created_at', 'DESC'], ['id', 'DESC']]
     });
 
-    if (!ass1File || !ass2File) {
-      throw new Error('Both ASS1 and ASS2 files required');
+    if (!cat2QpFile || !cat2MarksFile || !ass2File) {
+      return res.status(400).json({ error: 'CAT2 QP, CAT2 marks, and ASS2 files required' });
     }
 
-    ass1File.processing_status = 'processing';
-    ass2File.processing_status = 'processing';
-    await ass1File.save();
-    await ass2File.save();
+    if (!fileExists(cat2QpFile.file_path) || !fileExists(cat2MarksFile.file_path) || !fileExists(ass2File.file_path)) {
+      return res.status(400).json({ error: 'Uploaded CAT2 or ASS2 files not found' });
+    }
 
-    ass1File.processing_status = 'success';
-    ass2File.processing_status = 'success';
-    await ass1File.save();
-    await ass2File.save();
-
-    // Stage 3: Consolidate all files
-    const cat1Output = phase1Output.file_path;
-    const cat2Output = await IntermediateOutput.findOne({
-      where: { subject_id, output_type: 'CAT2_FINAL', is_latest: true }
+    const log = await ProcessingLog.create({
+      subject_id,
+      stage_number: 2,
+      status: 'started',
+      input_files: JSON.stringify([earlyReport.file_path, cat2QpFile.file_path, cat2MarksFile.file_path, ass2File.file_path])
     });
+
+    cat2QpFile.processing_status = 'processing';
+    cat2MarksFile.processing_status = 'processing';
+    ass2File.processing_status = 'processing';
+    await cat2QpFile.save();
+    await cat2MarksFile.save();
+    await ass2File.save();
 
     const outputsDir = process.env.OUTPUTS_DIR || './outputs';
-    const consolidatedOutput = path.join(outputsDir, `CO_ATTAINMENT_FINAL_${subject_id}_${Date.now()}.xlsx`);
+    const cat2OutputPath = path.join(outputsDir, `CAT2_FINAL_${subject_id}_${Date.now()}.xlsx`);
 
-    const stage3 = await runStage3(
-      template_path,
-      cat1Output,
-      cat2Output.file_path,
-      ass1File.file_path,
-      ass2File.file_path,
-      consolidatedOutput
-    );
-
-    if (stage3.status !== 'ok') {
-      throw new Error(`Stage 3 failed: ${stage3.message}`);
+    let stage1Result;
+    try {
+      stage1Result = await runStage1(cat2QpFile.file_path, cat2OutputPath);
+    } catch (error) {
+      throw new Error(`CAT2 stage 1 failed: ${error.error || error.message}`);
     }
 
-    // Save consolidated output
+    if (stage1Result.status !== 'ok') {
+      throw new Error(`CAT2 stage 1 error: ${stage1Result.message}`);
+    }
+
+    let stage2Result;
+    try {
+      stage2Result = await runStage2(cat2OutputPath, cat2MarksFile.file_path);
+    } catch (error) {
+      throw new Error(`CAT2 stage 2 failed: ${error.error || error.message}`);
+    }
+
+    if (stage2Result.status !== 'ok') {
+      throw new Error(`CAT2 stage 2 error: ${stage2Result.message}`);
+    }
+
+    cat2QpFile.processing_status = 'success';
+    cat2MarksFile.processing_status = 'success';
+    await cat2QpFile.save();
+    await cat2MarksFile.save();
+
     await IntermediateOutput.create({
       subject_id,
-      stage_number: 3,
-      output_type: 'CO_ATTAINMENT_FINAL',
-      file_path: consolidatedOutput
+      stage_number: 2,
+      output_type: 'CAT2_FINAL',
+      file_path: cat2OutputPath,
+      is_latest: true
     });
 
-    // Update phase
+    const midStage3Input = path.join(outputsDir, `MID_SEM_STAGE3_${subject_id}_${Date.now()}.xlsx`);
+    fs.copyFileSync(earlyReport.file_path, midStage3Input);
+
+    let stage3Result;
+    try {
+      stage3Result = await runStage3({
+        phase: 'mid',
+        outputPath: midStage3Input,
+        cat2Path: cat2OutputPath,
+        ass2Path: ass2File.file_path
+      });
+    } catch (error) {
+      throw new Error(`Stage 3 mid failed: ${error.error || error.message}`);
+    }
+
+    if (stage3Result.status !== 'ok') {
+      throw new Error(`Stage 3 mid error: ${stage3Result.message}`);
+    }
+
+    const config = await Configuration.findOne({ where: { subject_id } });
+    const ep = parseFloat(config?.ep) || 80;
+    const constraint = parseFloat(config?.constraint_value) || 79.99;
+    const ela = {
+      CO1: parseFloat(config?.ela_co1) || 75,
+      CO2: parseFloat(config?.ela_co2) || 75,
+      CO3: parseFloat(config?.ela_co3) || 70,
+      CO4: parseFloat(config?.ela_co4) || 85,
+      CO5: parseFloat(config?.ela_co5) || 80,
+      CO6: parseFloat(config?.ela_co6) || 78
+    };
+
+    const midReportOutput = path.join(outputsDir, `MID_SEM_REPORT_${subject_id}_${Date.now()}.xlsx`);
+
+    let stage4Result;
+    try {
+      stage4Result = await runStage4({
+        phase: 'mid',
+        coAttainmentPath: midStage3Input,
+        outputPath: midReportOutput,
+        ep,
+        constraint,
+        ela
+      });
+    } catch (error) {
+      throw new Error(`Stage 4 mid failed: ${error.error || error.message}`);
+    }
+
+    if (stage4Result.status !== 'ok') {
+      throw new Error(`Stage 4 mid error: ${stage4Result.message}`);
+    }
+
+    await IntermediateOutput.create({
+      subject_id,
+      stage_number: 4,
+      output_type: 'MID_SEM_REPORT',
+      file_path: midReportOutput,
+      is_latest: true
+    });
+
     await updateSubjectPhase(subject_id, 2);
+
+    log.status = 'completed';
+    log.output_file = midReportOutput;
+    log.execution_time_ms = Date.now() - startTime;
+    log.completed_at = new Date();
+    await log.save();
 
     res.json({
       status: 'success',
-      message: 'Phase 2 processing complete',
-      output_path: consolidatedOutput,
-      execution_time_ms: Date.now() - startTime
+      message: 'Mid-sem report generated',
+      output_path: midReportOutput,
+      execution_time_ms: log.execution_time_ms
     });
   } catch (error) {
+    await ProcessingLog.update(
+      {
+        status: 'failed',
+        error_message: error.message,
+        execution_time_ms: Date.now() - startTime,
+        completed_at: new Date()
+      },
+      { where: { subject_id: req.body.subject_id, stage_number: 2, status: 'started' } }
+    );
+
     await File.update(
       {
         processing_status: 'failed',
@@ -225,7 +267,7 @@ router.post('/process', async (req, res, next) => {
       {
         where: {
           subject_id: req.body.subject_id,
-          file_type: { [Op.in]: ['CAT2_QP', 'CAT2_MARKS', 'ASS1', 'ASS2'] },
+          file_type: { [Op.in]: ['CAT2_QP', 'CAT2_MARKS', 'ASS2'] },
           processing_status: 'processing'
         }
       }
