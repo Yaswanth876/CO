@@ -12,6 +12,17 @@ const { runStage4 } = require('../utils/pythonExecutor');
 const { fileExists, getFileSizeMB, deleteFile } = require('../utils/fileManager');
 const { updateSubjectPhase } = require('../utils/phaseTracker');
 
+const defaultConfigurationValues = {
+  ep: 80.00,
+  constraint_value: 79.99,
+  ela_co1: 75.00,
+  ela_co2: 75.00,
+  ela_co3: 70.00,
+  ela_co4: 85.00,
+  ela_co5: 80.00,
+  ela_co6: 78.00
+};
+
 function createReportUploadHandler(fileType) {
   return async (req, res, next) => {
     try {
@@ -216,13 +227,13 @@ router.post('/finalize', async (req, res, next) => {
     }
 
     // Get configuration
-    const config = await Configuration.findOne({
-      where: { subject_id }
+    const [config] = await Configuration.findOrCreate({
+      where: { subject_id },
+      defaults: {
+        subject_id,
+        ...defaultConfigurationValues
+      }
     });
-
-    if (!config) {
-      return res.status(400).json({ error: 'Configuration not found. Please set EP, constraint, and ELA values' });
-    }
 
     // Validate configuration is set
     const ep = parseFloat(config.ep) || 80;

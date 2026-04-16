@@ -6,6 +6,17 @@ const express = require('express');
 const router = express.Router();
 const { Subject, Configuration } = require('../models');
 
+const defaultConfigurationValues = {
+  ep: 80.00,
+  constraint_value: 79.99,
+  ela_co1: 75.00,
+  ela_co2: 75.00,
+  ela_co3: 70.00,
+  ela_co4: 85.00,
+  ela_co5: 80.00,
+  ela_co6: 78.00
+};
+
 /**
  * GET /api/configuration/:subject_id
  * Get configuration for a subject
@@ -24,13 +35,13 @@ router.get('/:subject_id', async (req, res, next) => {
       return res.status(404).json({ error: 'Subject not found' });
     }
 
-    const config = await Configuration.findOne({
-      where: { subject_id }
+    const [config] = await Configuration.findOrCreate({
+      where: { subject_id },
+      defaults: {
+        subject_id,
+        ...defaultConfigurationValues
+      }
     });
-
-    if (!config) {
-      return res.status(404).json({ error: 'Configuration not found' });
-    }
 
     res.json({
       status: 'success',
@@ -72,13 +83,13 @@ router.put('/:subject_id', async (req, res, next) => {
       return res.status(404).json({ error: 'Subject not found' });
     }
 
-    const config = await Configuration.findOne({
-      where: { subject_id }
+    const [config] = await Configuration.findOrCreate({
+      where: { subject_id },
+      defaults: {
+        subject_id,
+        ...defaultConfigurationValues
+      }
     });
-
-    if (!config) {
-      return res.status(404).json({ error: 'Configuration not found' });
-    }
 
     // Validate values
     if (ep !== undefined) {
