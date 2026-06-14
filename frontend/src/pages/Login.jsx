@@ -91,7 +91,7 @@ const prefersReducedMotion = useReducedMotion();
   };
 
   return (
-    <div className="min-h-screen grid grid-cols-1 md:grid-cols-[3fr_2fr] bg-gray-100">
+    <main className="min-h-screen grid grid-cols-1 md:grid-cols-[3fr_2fr] bg-gray-100">
 
       {/* Right Panel */}
       <motion.div
@@ -167,7 +167,7 @@ const prefersReducedMotion = useReducedMotion();
     </CardHeader>
 
     <CardContent className="space-y-6">
-
+      <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }} className="space-y-6">
       <motion.div variants={itemVariants} className="space-y-2">
         <Label htmlFor="email" className="text-lg">Email</Label>
 
@@ -199,14 +199,16 @@ const prefersReducedMotion = useReducedMotion();
           />
         </div>
       </motion.div>
-      {error && (
-        <motion.p
-          variants={itemVariants}
-          className="text-sm text-red-600 text-center"
-        >
-          {error}
-        </motion.p>
-      )}
+      <div aria-live="polite" aria-atomic="true">
+        {error && (
+          <motion.p
+            variants={itemVariants}
+            className="text-sm text-red-600 text-center"
+          >
+            {error}
+          </motion.p>
+        )}
+      </div>
 
       <motion.div variants={itemVariants} className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600">
         <p className="font-semibold text-slate-700">Seeded Credentials</p>
@@ -216,16 +218,16 @@ const prefersReducedMotion = useReducedMotion();
 
       <motion.div variants={itemVariants}>
         <Button
-          type="button"
+          type="submit"
           size="xl"
           className="login-button-motion w-full text-lg"
-          onClick={handleLogin}
           disabled={loading}
+          isLoading={loading}
         >
           {loading ? "Signing In..." : "Sign In"}
         </Button>
       </motion.div>
-
+      </form>
     </CardContent>
 
   </Card>
@@ -233,7 +235,7 @@ const prefersReducedMotion = useReducedMotion();
 </motion.div>
       </div>
 
-    </div>
+    </main>
   );
 }
 

@@ -1,4 +1,5 @@
-import { Menu, User, ChevronDown } from "lucide-react";
+import { useLocation, Link } from "react-router-dom";
+import { Menu, User, ChevronDown, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "../ui/button";
 import {
@@ -10,6 +11,9 @@ import {
 } from "../ui/dropdown-menu";
 
 export function Navbar({ user, onLogout, onMenuClick, onOpenProfile, onOpenSettings }) {
+  const location = useLocation();
+  const pathnames = location.pathname.split('/').filter((x) => x);
+
   return (
     <motion.header
       className="navbar-blur fixed inset-x-0 top-0 z-40 border-b border-red-100/80"
@@ -17,14 +21,14 @@ export function Navbar({ user, onLogout, onMenuClick, onOpenProfile, onOpenSetti
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
     >
-      <div className="flex h-24 flex-col justify-center px-4 md:h-20 md:flex-row md:items-center md:justify-between md:px-8">
+      <nav className="flex h-24 flex-col justify-center px-4 md:h-20 md:flex-row md:items-center md:justify-between md:px-8" aria-label="Main Navigation">
         {/* Mobile: centered banner */}
         <div className="mb-1 flex justify-center md:hidden">
           <img src="/tce-banner.png" alt="TCE Logo" className="h-8 w-auto" />
         </div>
 
         <div className="flex w-full items-center justify-between md:gap-6">
-          {/* Left: menu + logo */}
+          {/* Left: menu + logo + breadcrumbs */}
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -41,14 +45,35 @@ export function Navbar({ user, onLogout, onMenuClick, onOpenProfile, onOpenSetti
               className="hidden h-12 w-auto md:block"
             />
 
-            <motion.h1
-              className="text-base font-semibold text-red-700 md:text-xl"
+            <motion.div
+              className="hidden md:flex items-center text-sm font-medium text-slate-500"
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.25, duration: 0.4 }}
             >
-              TCE COAS
-            </motion.h1>
+              <span className="text-red-700 font-semibold mr-2">TCE COAS</span>
+              {pathnames.length > 0 && (
+                <nav aria-label="Breadcrumb" className="flex items-center space-x-1">
+                  <ChevronRight size={14} />
+                  {pathnames.map((value, index) => {
+                    const to = `/${pathnames.slice(0, index + 1).join('/')}`;
+                    const isLast = index === pathnames.length - 1;
+                    return (
+                      <div key={to} className="flex items-center space-x-1">
+                        <Link 
+                           to={to} 
+                           className={isLast ? "text-slate-900 font-semibold capitalize pointer-events-none" : "hover:text-red-700 capitalize"}
+                           aria-current={isLast ? "page" : undefined}
+                        >
+                          {value.replace(/_/g, ' ')}
+                        </Link>
+                        {!isLast && <ChevronRight size={14} />}
+                      </div>
+                    );
+                  })}
+                </nav>
+              )}
+            </motion.div>
           </div>
 
           {/* Right: user dropdown */}
@@ -77,7 +102,7 @@ export function Navbar({ user, onLogout, onMenuClick, onOpenProfile, onOpenSetti
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </div>
+      </nav>
     </motion.header>
   );
 }

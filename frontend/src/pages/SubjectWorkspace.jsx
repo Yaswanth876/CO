@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import FileUploadSection from "../components/layout/FileUploadSection";
+import { Check } from "lucide-react";
+import StageUploadCard from "../components/layout/StageUploadCard";
 import ParameterSection from "../components/layout/ParameterSection";
 import { pageVariants, containerVariants, sectionVariants } from "../lib/animations";
 import {
@@ -12,6 +13,8 @@ import {
   getSubjectReports,
   getSubjectStatus,
   getSubjects,
+  processPhase1,
+  processPhase2,
   processPhase3,
   saveConfiguration,
 } from "../lib/api";
@@ -32,25 +35,10 @@ const workflowSteps = [
 ];
 
 const stageFiles = {
-  1: ["CAT1_QP", "CAT1_MARKS", "ASS1"],
-  2: ["CAT2_QP", "CAT2_MARKS", "ASS2"],
+  1: ["CAT1_MARKS", "ASS1"],
+  2: ["CAT2_MARKS", "ASS2"],
   3: ["TERMINAL_QP", "TERMINAL"],
 };
-
-const endUploadKeys = stageFiles[3];
-
-function getActiveStage(files = {}) {
-  const earlyComplete = stageFiles[1].every((key) => files[key]);
-  const midComplete = stageFiles[2].every((key) => files[key]);
-
-  if (!earlyComplete) {
-    return 1;
-  }
-  if (!midComplete) {
-    return 2;
-  }
-  return 3;
-}
 
 export default function SubjectWorkspace({ user }) {
   const [uploadedFiles, setUploadedFiles] = useState({});
@@ -59,12 +47,9 @@ export default function SubjectWorkspace({ user }) {
   const [saveMessage, setSaveMessage] = useState("");
   const [subjects, setSubjects] = useState([]);
   const [subjectId, setSubjectId] = useState(null);
-  const [generatingFinal, setGeneratingFinal] = useState(false);
+  
+  const [generatingStage, setGeneratingStage] = useState("");
   const [clearingProcess, setClearingProcess] = useState(false);
-  const [openSections, setOpenSections] = useState({
-    upload: true,
-    parameter: false,
-  });
 
   const { subjectCode } = useParams();
   const resolvedSubjectCode = subjectCode || "SUBJECT";
@@ -74,10 +59,20 @@ export default function SubjectWorkspace({ user }) {
       name: "Subject Name",
       semester: "Semester",
     };
-  const activeStage = getActiveStage(uploadedFiles);
-  const uploadSectionCompleted = endUploadKeys.every((key) => uploadedFiles[key]);
 
-  const endFilesReady = stageFiles[3].every((key) => uploadedFiles[key]);
+  const earlyReady = stageFiles[1].every((key) => uploadedFiles[key]);
+  const midReady = stageFiles[2].every((key) => uploadedFiles[key]);
+  const endReady = stageFiles[3].every((key) => uploadedFiles[key]);
+
+  function getActiveStage(files = {}) {
+    const earlyComplete = stageFiles[1].every((key) => files[key]);
+    const midComplete = stageFiles[2].every((key) => files[key]);
+    if (!earlyComplete) return 1;
+    if (!midComplete) return 2;
+    return 3;
+  }
+
+  const activeStage = getActiveStage(uploadedFiles);
 
   async function downloadLatestReportByType(outputType, fallbackName) {
     const reports = await getSubjectReports(subjectId);
@@ -98,38 +93,41 @@ export default function SubjectWorkspace({ user }) {
     URL.revokeObjectURL(url);
   }
 
-  async function handleGenerateFinal() {
-    if (!subjectId || !subjectCode || !endFilesReady) {
-      return;
-    }
-
-    setGeneratingFinal(true);
+  async function handleGenerateStage(stageName) {
+    if (!subjectId) return;
+    setGeneratingStage(stageName);
     setSaveMessage("");
 
     try {
-      await processPhase3(subjectId);
-      await downloadLatestReportByType("CO_ATTAINMENT_COMPLETE", "END_SEM_REPORT");
-      setStep(4);
-      setSaveMessage("End-sem report generated and downloaded.");
+      if (stageName === "Early-sem") {
+        await processPhase1(subjectId);
+        await downloadLatestReportByType("EARLY_SEM_REPORT", "EARLY_SEM_FEEDBACK");
+        setSaveMessage("Early-sem feedback generated and downloaded.");
+        setStep(Math.max(step, 2));
+      } else if (stageName === "Mid-sem") {
+        await processPhase2(subjectId);
+        await downloadLatestReportByType("MID_SEM_REPORT", "MID_SEM_REPORT");
+        setSaveMessage("Mid-sem report generated and downloaded.");
+        setStep(Math.max(step, 3));
+      } else if (stageName === "Final") {
+        await processPhase3(subjectId);
+        await downloadLatestReportByType("CO_ATTAINMENT_COMPLETE", "END_SEM_REPORT");
+        setSaveMessage("End-sem final report generated and downloaded.");
+        setStep(4);
+      }
     } catch (error) {
-      setSaveMessage(error.message || "Failed to generate end-sem report.");
+      setSaveMessage(error.message || `Failed to generate ${stageName} report.`);
     } finally {
-      setGeneratingFinal(false);
+      setGeneratingStage("");
     }
   }
 
   async function handleClearProcess() {
-    if (!subjectId) {
-      return;
-    }
-
+    if (!subjectId) return;
     const confirmed = window.confirm(
       "Are you sure you want to clear the process for this subject? This will remove uploaded files, saved parameters, and generated outputs."
     );
-
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     setClearingProcess(true);
     setSaveMessage("");
@@ -139,7 +137,6 @@ export default function SubjectWorkspace({ user }) {
       setUploadedFiles({});
       setParameters({});
       setStep(1);
-      setOpenSections({ upload: true, parameter: false });
       setSaveMessage("Process cleared successfully.");
     } catch (error) {
       setSaveMessage(error.message || "Failed to clear the process.");
@@ -157,45 +154,35 @@ export default function SubjectWorkspace({ user }) {
         setSubjects([]);
       }
     }
-
     loadSubjects();
   }, []);
 
   useEffect(() => {
     async function bootstrapSubjectWorkspace() {
-      if (!subjectCode) {
-        return;
-      }
-
+      if (!subjectCode) return;
       try {
         const subject = await ensureSubject(subjectCode);
         setSubjectId(subject.id);
 
         const status = await getSubjectStatus(subject.id);
         const nextUploaded = {
-          CAT1_QP: status.files?.some((file) => file.file_type === "CAT1_QP") || false,
-          CAT1_MARKS: status.files?.some((file) => file.file_type === "CAT1_MARKS") || false,
-          CAT2_QP: status.files?.some((file) => file.file_type === "CAT2_QP") || false,
-          CAT2_MARKS: status.files?.some((file) => file.file_type === "CAT2_MARKS") || false,
-          ASS1: status.files?.some((file) => file.file_type === "ASS1") || false,
-          ASS2: status.files?.some((file) => file.file_type === "ASS2") || false,
-          TERMINAL_QP: status.files?.some((file) => file.file_type === "TERMINAL_QP") || false,
-          TERMINAL: status.files?.some((file) => file.file_type === "TERMINAL") || false,
+          CAT1_MARKS: status.files?.some((f) => f.file_type === "CAT1_MARKS") || false,
+          CAT2_MARKS: status.files?.some((f) => f.file_type === "CAT2_MARKS") || false,
+          ASS1: status.files?.some((f) => f.file_type === "ASS1") || false,
+          ASS2: status.files?.some((f) => f.file_type === "ASS2") || false,
+          TERMINAL_QP: status.files?.some((f) => f.file_type === "TERMINAL_QP") || false,
+          TERMINAL: status.files?.some((f) => f.file_type === "TERMINAL") || false,
         };
         setUploadedFiles(nextUploaded);
 
         let restoredStep = 1;
-        if (status.current_phase >= 3) {
-          restoredStep = 4;
-        } else if (status.current_phase >= 2) {
-          restoredStep = 3;
-        } else if (status.current_phase >= 1) {
-          restoredStep = 2;
-        }
+        if (status.current_phase >= 3) restoredStep = 4;
+        else if (status.current_phase >= 2) restoredStep = 3;
+        else if (status.current_phase >= 1) restoredStep = 2;
 
         try {
           const config = await getConfiguration(subject.id);
-          const restoredParameters = {
+          setParameters({
             ep: String(config.ep ?? ""),
             constraint: String(config.constraint ?? ""),
             ela: {
@@ -206,45 +193,27 @@ export default function SubjectWorkspace({ user }) {
               CO5: String(config?.ela?.CO5 ?? ""),
               CO6: String(config?.ela?.CO6 ?? ""),
             },
-          };
-
-          setParameters(restoredParameters);
-        } catch {
-          // Keep UI defaults when configuration is not yet available.
-        }
+          });
+        } catch {}
 
         setStep(restoredStep);
-        setOpenSections({
-          upload: restoredStep <= 1,
-          parameter: restoredStep === 2,
-        });
       } catch {
         setSaveMessage("Unable to load workspace state.");
       }
     }
-
     bootstrapSubjectWorkspace();
   }, [subjectCode]);
 
+  const handleUploadChange = (files) => {
+    setUploadedFiles(files);
+  };
+
   return (
-    <motion.div
-      className="space-y-6 p-4 md:p-6"
-      variants={pageVariants}
-      initial="hidden"
-      animate="visible"
-      exit="exit"
-    >
-      <motion.div
-        className="flex flex-wrap items-center justify-between gap-3"
-        variants={sectionVariants}
-      >
+    <motion.div className="space-y-6 p-4 md:p-6" variants={pageVariants} initial="hidden" animate="visible" exit="exit">
+      <motion.div className="flex flex-wrap items-center justify-between gap-3" variants={sectionVariants}>
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Subject Workspace
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold text-red-950">
-            {resolvedSubjectCode} - {details.name}
-          </h1>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Subject Workspace</p>
+          <h1 className="mt-1 text-2xl font-semibold text-red-950">{resolvedSubjectCode} - {details.name}</h1>
           <p className="mt-1 text-sm font-medium text-slate-600">{details.semester}</p>
           <p className="mt-2 text-sm text-slate-600">
             Manage Early-sem, Mid-sem, and End-sem files, configure CO parameters, and download stage reports.
@@ -252,50 +221,32 @@ export default function SubjectWorkspace({ user }) {
         </div>
       </motion.div>
 
-      <motion.div
-        className="rounded-xl border border-red-100 bg-white p-3 shadow-[0_8px_20px_-20px_rgba(127,29,29,0.65)]"
-        variants={sectionVariants}
-      >
-        <ol className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <motion.div className="rounded-xl border border-red-100 bg-white p-3 shadow-[0_8px_20px_-20px_rgba(127,29,29,0.65)]" variants={sectionVariants}>
+        <ol className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           {workflowSteps.map((item) => {
             const isActive = activeStage === item.id;
             const isCompleted = activeStage > item.id;
-
             return (
               <motion.li
                 key={item.id}
                 className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-xs transition-colors duration-300 ${
-                  isCompleted
-                    ? "border-red-200 bg-red-100/70 text-red-900"
-                    : isActive
-                    ? "border-red-300 bg-white text-red-800 shadow-sm"
-                    : "border-slate-200 bg-white/70 text-slate-500"
+                  isCompleted ? "border-red-200 bg-red-100/70 text-red-900" : isActive ? "border-red-300 bg-white text-red-800 shadow-sm" : "border-slate-200 bg-white/70 text-slate-500"
                 }`}
                 layout
                 transition={{ duration: 0.25 }}
               >
                 <motion.span
                   className={`step-badge grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-semibold ${
-                    isCompleted || isActive
-                      ? "bg-red-700 text-white active"
-                      : "bg-slate-200 text-slate-600"
+                    isCompleted || isActive ? "bg-red-700 text-white active" : "bg-slate-200 text-slate-600"
                   }`}
-                  animate={{
-                    scale: isActive ? 1.1 : 1,
-                    backgroundColor: isCompleted || isActive ? "#b91c1c" : "#e2e8f0",
-                  }}
+                  animate={{ scale: isActive ? 1.1 : 1, backgroundColor: isCompleted || isActive ? "#b91c1c" : "#e2e8f0" }}
                   transition={{ duration: 0.3 }}
                 >
-                  {item.id}
+                  {isCompleted ? <Check size={14} strokeWidth={3} /> : item.id}
                 </motion.span>
                 <span className="font-medium leading-tight">{item.label}</span>
-
                 {isActive && (
-                  <motion.span
-                    className="ml-auto h-1.5 w-1.5 rounded-full bg-red-500"
-                    animate={{ opacity: [1, 0.3, 1] }}
-                    transition={{ duration: 1.2, repeat: Infinity }}
-                  />
+                  <motion.span className="ml-auto h-1.5 w-1.5 rounded-full bg-red-500" animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.2, repeat: Infinity }} />
                 )}
               </motion.li>
             );
@@ -303,95 +254,103 @@ export default function SubjectWorkspace({ user }) {
         </ol>
       </motion.div>
 
-      <motion.div
-        className="space-y-6"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        <FileUploadSection
-          isOpen={openSections.upload}
-          completed={uploadSectionCompleted}
+      <motion.div className="space-y-6" variants={containerVariants} initial="hidden" animate="visible">
+        
+        {/* Early Sem Group */}
+        <StageUploadCard
+          title="Early-sem"
+          fields={[
+            { key: "CAT1_MARKS", label: "CAT 1 Marksheet (.xlsx)" },
+            { key: "ASS1", label: "Assignment 1 Marksheet (.xlsx)" }
+          ]}
           uploadedFiles={uploadedFiles}
-          user={user}
+          onUploadChange={handleUploadChange}
           subjectId={subjectId}
           subjectCode={resolvedSubjectCode}
-          onToggle={() =>
-            setOpenSections((prev) => ({
-              ...prev,
-              upload: !prev.upload,
-            }))
-          }
-          onUploadChange={(files) => {
-            setUploadedFiles(files);
-            let nextStep = step;
-
-            if (Object.values(files).filter(Boolean).length === 8 && nextStep < 2) {
-              nextStep = 2;
-            }
-
-            if (nextStep === 2) {
-              setStep(2);
-              setOpenSections((prev) => ({
-                ...prev,
-                upload: false,
-                parameter: true,
-              }));
-            } else if (nextStep === 4) {
-              setStep(4);
-              setOpenSections((prev) => ({
-                ...prev,
-                upload: false,
-                parameter: false,
-              }));
-            }
-          }}
+          user={user}
+          isCompleted={earlyReady}
+          onGenerate={() => handleGenerateStage("Early-sem")}
+          generateLabel="Generate Early-sem Report"
+          canGenerate={earlyReady && !!subjectId}
+          isGenerating={generatingStage === "Early-sem"}
         />
 
-        <ParameterSection
-          isOpen={openSections.parameter}
-          completed={step > 2}
-          initialValues={parameters}
-          onToggle={() =>
-            setOpenSections((prev) => ({
-              ...prev,
-              parameter: !prev.parameter,
-            }))
-          }
-          canGenerateFinal={endFilesReady && step >= 3 && !!subjectId}
-          isGeneratingFinal={generatingFinal}
-          onComplete={(values) => {
-            if (!subjectId) {
-              setSaveMessage("Subject is not ready yet. Please try again.");
-              return;
-            }
-
-            setParameters(values);
-            setStep(3);
-
-            saveConfiguration(subjectId, {
-              ep: values.ep,
-              constraint: values.constraint,
-              ela: values.ela,
-            })
-              .then(() => setSaveMessage("Parameters saved."))
-              .catch((error) => setSaveMessage(error.message || "Failed to save parameters."));
-          }}
-          onGenerateFinal={handleGenerateFinal}
+        {/* Mid Sem Group */}
+        <StageUploadCard
+          title="Mid-sem"
+          fields={[
+            { key: "CAT2_MARKS", label: "CAT 2 Marksheet (.xlsx)" },
+            { key: "ASS2", label: "Assignment 2 Marksheet (.xlsx)" }
+          ]}
+          uploadedFiles={uploadedFiles}
+          onUploadChange={handleUploadChange}
+          subjectId={subjectId}
+          subjectCode={resolvedSubjectCode}
+          user={user}
+          isCompleted={midReady}
+          onGenerate={() => handleGenerateStage("Mid-sem")}
+          generateLabel="Generate Mid-sem Report"
+          canGenerate={earlyReady && midReady && !!subjectId}
+          isGenerating={generatingStage === "Mid-sem"}
         />
+
+        {/* End Sem Group */}
+        <StageUploadCard
+          title="End-sem & Parameters"
+          fields={[
+            { key: "TERMINAL_QP", label: "Terminal Question Paper (.docx)" },
+            { key: "TERMINAL", label: "Terminal Marksheet (.xlsx)" }
+          ]}
+          uploadedFiles={uploadedFiles}
+          onUploadChange={handleUploadChange}
+          subjectId={subjectId}
+          subjectCode={resolvedSubjectCode}
+          user={user}
+          isCompleted={endReady && step >= 3}
+          onGenerate={() => handleGenerateStage("Final")}
+          generateLabel="Generate Final Report"
+          canGenerate={earlyReady && midReady && endReady && step >= 3 && !!subjectId}
+          isGenerating={generatingStage === "Final"}
+        >
+          {/* Parameter Section directly embedded in End-Sem group */}
+          <div className="mt-6 pt-6 border-t border-slate-100">
+            <ParameterSection
+              isOpen={true}
+              completed={step > 2}
+              initialValues={parameters}
+              onToggle={() => {}} // Always open since it's embedded
+              canGenerateFinal={false} // Generation handled by StageUploadCard now
+              isGeneratingFinal={false}
+              hideGenerateButton={true} // New prop needed or just remove generation from ParameterSection
+              onComplete={(values) => {
+                if (!subjectId) {
+                  setSaveMessage("Subject is not ready yet.");
+                  return;
+                }
+                setParameters(values);
+                setStep(3);
+                saveConfiguration(subjectId, {
+                  ep: values.ep,
+                  constraint: values.constraint,
+                  ela: values.ela,
+                }).then(() => setSaveMessage("Parameters saved.")).catch(err => setSaveMessage(err.message));
+              }}
+            />
+          </div>
+        </StageUploadCard>
 
         <div>
           <button
             type="button"
             className="btn-press inline-flex items-center gap-2 rounded-md bg-red-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/40 disabled:opacity-50"
             onClick={handleClearProcess}
-            disabled={clearingProcess || generatingFinal}
+            disabled={clearingProcess || generatingStage !== ""}
           >
             {clearingProcess ? "Clearing..." : "Clear the process"}
           </button>
         </div>
 
-        {saveMessage ? <p className="text-xs text-slate-500">{saveMessage}</p> : null}
+        {saveMessage && <p className="text-sm font-medium text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200">{saveMessage}</p>}
       </motion.div>
     </motion.div>
   );

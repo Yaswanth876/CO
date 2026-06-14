@@ -14,12 +14,20 @@ import {
   XCircle,
   Download,
   Search,
-  Key
+  Key,
+  MoreVertical
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import { Pagination } from "../components/ui/pagination";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
 import {
   getFaculty,
   addFaculty,
@@ -65,6 +73,14 @@ export default function AdminDashboard() {
   const [searchReport, setSearchReport] = useState("");
   const [selectedFacultyFilter, setSelectedFacultyFilter] = useState("All");
   const [selectedCourseFilter, setSelectedCourseFilter] = useState("All");
+
+  // Pagination States
+  const ITEMS_PER_PAGE = 10;
+  const [facultyPage, setFacultyPage] = useState(1);
+  const [coursePage, setCoursePage] = useState(1);
+  const [assignmentPage, setAssignmentPage] = useState(1);
+  const [reportPage, setReportPage] = useState(1);
+  const [logPage, setLogPage] = useState(1);
 
   // Form States
   const [showFacultyModal, setShowFacultyModal] = useState(false);
@@ -270,6 +286,17 @@ export default function AdminDashboard() {
     }
   };
 
+  // Pagination logic
+  const filteredFaculty = faculty.filter(f => f.full_name.toLowerCase().includes(searchFaculty.toLowerCase()) || f.email.toLowerCase().includes(searchFaculty.toLowerCase()));
+  const paginatedFaculty = filteredFaculty.slice((facultyPage - 1) * ITEMS_PER_PAGE, facultyPage * ITEMS_PER_PAGE);
+
+  const filteredCourses = courses.filter(c => c.subject_name.toLowerCase().includes(searchCourse.toLowerCase()) || c.subject_code.toLowerCase().includes(searchCourse.toLowerCase()));
+  const paginatedCourses = filteredCourses.slice((coursePage - 1) * ITEMS_PER_PAGE, coursePage * ITEMS_PER_PAGE);
+
+  const filteredReports = reports.filter(r => filterReportStatus === "All" || r.status === filterReportStatus)
+    .filter(r => (r.subjectName || "").toLowerCase().includes(searchReport.toLowerCase()) || (r.subjectCode || "").toLowerCase().includes(searchReport.toLowerCase()));
+  const paginatedReports = filteredReports.slice((reportPage - 1) * ITEMS_PER_PAGE, reportPage * ITEMS_PER_PAGE);
+
   return (
     <motion.div
       className="p-4 md:p-6 space-y-6"
@@ -307,7 +334,7 @@ export default function AdminDashboard() {
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-slate-500">Reports Submitted Today</CardTitle>
+                  <CardTitle className="text-sm md:text-sm font-medium text-slate-500">Reports Submitted Today</CardTitle>
                   <FileSpreadsheet size={20} className="text-amber-600" />
                 </CardHeader>
                 <CardContent>
@@ -317,7 +344,7 @@ export default function AdminDashboard() {
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-slate-500">Actions Logged Today</CardTitle>
+                  <CardTitle className="text-sm md:text-sm font-medium text-slate-500">Actions Logged Today</CardTitle>
                   <Activity size={20} className="text-blue-600" />
                 </CardHeader>
                 <CardContent>
@@ -327,7 +354,7 @@ export default function AdminDashboard() {
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-slate-500">Active Faculty Today</CardTitle>
+                  <CardTitle className="text-sm md:text-sm font-medium text-slate-500">Active Faculty Today</CardTitle>
                   <Users size={20} className="text-emerald-600" />
                 </CardHeader>
                 <CardContent>
@@ -337,7 +364,7 @@ export default function AdminDashboard() {
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-slate-500">New Courses Added Today</CardTitle>
+                  <CardTitle className="text-sm md:text-sm font-medium text-slate-500">New Courses Added Today</CardTitle>
                   <BookOpen size={20} className="text-red-600" />
                 </CardHeader>
                 <CardContent>
@@ -467,9 +494,7 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {faculty
-                      .filter(f => f.full_name.toLowerCase().includes(searchFaculty.toLowerCase()) || f.email.toLowerCase().includes(searchFaculty.toLowerCase()))
-                      .map(f => (
+                    {paginatedFaculty.map(f => (
                         <tr key={f.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                           <td className="p-4 font-medium text-slate-900">{f.full_name}</td>
                           <td className="p-4 text-slate-600">{f.email}</td>
@@ -481,32 +506,40 @@ export default function AdminDashboard() {
                           </td>
                           <td className="p-4 text-slate-500">{new Date(f.created_at).toLocaleDateString()}</td>
                           <td className="p-4 text-right space-x-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="inline-flex items-center gap-1"
-                              onClick={() => {
-                                setResetForm({ id: f.id, name: f.full_name, password: "" });
-                                setShowResetModal(true);
-                              }}
-                            >
-                              <Key size={14} /> Reset
-                            </Button>
-                            <Button
-                              variant={f.is_active ? "destructive" : "outline"}
-                              size="sm"
-                              className="inline-flex items-center gap-1"
-                              onClick={() => handleToggleFaculty(f.id, f.is_active)}
-                            >
-                              {f.is_active ? <UserX size={14} /> : <UserCheck size={14} />}
-                              {f.is_active ? "Deactivate" : "Activate"}
-                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                  <span className="sr-only">Open menu</span>
+                                  <MoreVertical className="h-4 w-4 text-slate-500" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => { setResetForm({ id: f.id, name: f.full_name, password: "" }); setShowResetModal(true); }}>
+                                  <Key className="mr-2 h-4 w-4" /> Reset Password
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleToggleFaculty(f.id, f.is_active)} className={f.is_active ? "text-red-600 focus:bg-red-50" : "text-emerald-600 focus:bg-emerald-50"}>
+                                  {f.is_active ? "Deactivate Account" : "Activate Account"}
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </td>
                         </tr>
                       ))}
+                    {paginatedFaculty.length === 0 && (
+                      <tr>
+                        <td colSpan="5" className="p-8 text-center text-slate-500">
+                          No faculty found.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </CardContent>
+              <Pagination 
+                currentPage={facultyPage} 
+                totalPages={Math.ceil(filteredFaculty.length / ITEMS_PER_PAGE)} 
+                onPageChange={setFacultyPage} 
+              />
             </Card>
           </div>
         )}

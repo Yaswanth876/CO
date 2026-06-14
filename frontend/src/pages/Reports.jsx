@@ -222,10 +222,10 @@ export default function Reports({ user }) {
 
       <motion.div variants={sectionVariants}>
         <Card className="border-red-100/80 bg-red-50/50">
-          <CardContent>
+          <CardContent className="pt-6 md:pt-8">
             <p className="flex items-center gap-2 text-sm text-slate-600">
-              <FileSpreadsheet size={16} className="text-red-700" />
-              Submit generated reports so that the course coordinator or auditor can approve them.
+              <FileSpreadsheet size={16} className="text-red-700 shrink-0" />
+              <span>Submit generated reports so that the course coordinator or auditor can approve them.</span>
             </p>
           </CardContent>
         </Card>
