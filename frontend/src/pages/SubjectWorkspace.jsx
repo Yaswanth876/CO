@@ -35,8 +35,8 @@ const workflowSteps = [
 ];
 
 const stageFiles = {
-  1: ["CAT1_MARKS", "ASS1"],
-  2: ["CAT2_MARKS", "ASS2"],
+  1: ["CAT1_QP", "CAT1_MARKS", "ASS1"],
+  2: ["CAT2_QP", "CAT2_MARKS", "ASS2"],
   3: ["TERMINAL_QP", "TERMINAL"],
 };
 
@@ -166,7 +166,9 @@ export default function SubjectWorkspace({ user }) {
 
         const status = await getSubjectStatus(subject.id);
         const nextUploaded = {
+          CAT1_QP: status.files?.some((f) => f.file_type === "CAT1_QP") || false,
           CAT1_MARKS: status.files?.some((f) => f.file_type === "CAT1_MARKS") || false,
+          CAT2_QP: status.files?.some((f) => f.file_type === "CAT2_QP") || false,
           CAT2_MARKS: status.files?.some((f) => f.file_type === "CAT2_MARKS") || false,
           ASS1: status.files?.some((f) => f.file_type === "ASS1") || false,
           ASS2: status.files?.some((f) => f.file_type === "ASS2") || false,
@@ -260,6 +262,7 @@ export default function SubjectWorkspace({ user }) {
         <StageUploadCard
           title="Early-sem"
           fields={[
+            { key: "CAT1_QP", label: "CAT 1 Question Paper (.docx)" },
             { key: "CAT1_MARKS", label: "CAT 1 Marksheet (.xlsx)" },
             { key: "ASS1", label: "Assignment 1 Marksheet (.xlsx)" }
           ]}
@@ -279,6 +282,7 @@ export default function SubjectWorkspace({ user }) {
         <StageUploadCard
           title="Mid-sem"
           fields={[
+            { key: "CAT2_QP", label: "CAT 2 Question Paper (.docx)" },
             { key: "CAT2_MARKS", label: "CAT 2 Marksheet (.xlsx)" },
             { key: "ASS2", label: "Assignment 2 Marksheet (.xlsx)" }
           ]}

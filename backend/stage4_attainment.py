@@ -234,7 +234,7 @@ def main():
 
                 cell = sheet2.cell(row=row, column=dest_col)
                 if phase == "end":
-                    cell.value = f"=0.7*{e_col}{row}+0.3*{l_col}{row}"
+                    cell.value = f"=0.6*{e_col}{row}+0.4*{l_col}{row}"
                 else:
                     # Interim phases: internal-only attainment.
                     cell.value = f"={e_col}{row}"
@@ -252,19 +252,19 @@ def main():
         for i in range(6):
             sheet2.cell(row=summary_row + 1, column=19 + i).value = ep
 
-        sheet2.cell(row=summary_row + 2, column=18).value = "Constraint"
+        sheet2.cell(row=summary_row + 2, column=18).value = ">EP"
         for i in range(6):
             col = get_column_letter(19 + i)
             sheet2.cell(row=summary_row + 2, column=19 + i).value = (
-                f'=COUNTIF({col}8:{col}{last_student},">={constraint}")'
+                f'=COUNTIF({col}8:{col}{last_student},">="&{get_column_letter(19 + i)}{summary_row + 1})'
             )
 
-        sheet2.cell(row=summary_row + 3, column=18).value = "Actual Attainment (%)"
+        sheet2.cell(row=summary_row + 3, column=18).value = "Actual Atta"
         for i in range(6):
             c_cell = f"{get_column_letter(19 + i)}{summary_row + 2}"
-            ep_cell = f"{get_column_letter(19 + i)}{summary_row + 1}"
+            t_cell = f"{get_column_letter(19 + i)}{summary_row}"
             cell = sheet2.cell(row=summary_row + 3, column=19 + i)
-            cell.value = f"=({c_cell}/{ep_cell})*100"
+            cell.value = f"=IFERROR(({c_cell}/{t_cell})*100, 0)"
             cell.number_format = "0.00"
 
         # Step G: ELA and Relative Attainment
@@ -283,7 +283,8 @@ def main():
             ela_cell = f"{get_column_letter(19 + i)}{ela_row}"
 
             cell = sheet2.cell(row=rel_row, column=19 + i)
-            cell.value = f"=MIN(({ela_cell}/{actual_cell})*100,100)"
+            # Correct logic: (Actual / ELA) * 100
+            cell.value = f"=IFERROR(MIN(({actual_cell}/{ela_cell})*100, 100), 0)"
             cell.number_format = "0.00"
             cell.alignment = Alignment(horizontal="center")
 

@@ -160,9 +160,17 @@ export default function Reports({ user }) {
                     </span>
                   </div>
 
-                  <CardTitle className="text-lg leading-6 text-slate-900">
-                    {report.course?.subject_name}
-                  </CardTitle>
+                  <div>
+                    <CardTitle className="text-lg leading-6 text-slate-900">
+                      {report.course?.subject_name}
+                    </CardTitle>
+                    <p className="text-sm font-medium text-slate-500 mt-1">
+                      {report.report_name?.includes('EARLY_SEM') ? 'Early Sem Report' : 
+                       report.report_name?.includes('MID_SEM') ? 'Mid Sem Report' : 
+                       report.report_name?.includes('FINAL') ? 'End Sem Report' : 
+                       'Course Report'}
+                    </p>
+                  </div>
                 </CardHeader>
 
                 <CardContent className="space-y-4">
