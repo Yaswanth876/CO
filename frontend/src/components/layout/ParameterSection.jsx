@@ -249,21 +249,7 @@ export default function ParameterSection({
                   )}
                 </motion.div>
 
-                <motion.div
-                  className="pt-2"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.4 }}
-                >
-                  <motion.button
-                    onClick={handleContinue}
-                    className="btn-press inline-flex items-center gap-2 rounded-md bg-red-800 px-5 py-2.5 text-sm font-medium text-white hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/40 disabled:opacity-50"
-                    whileTap={{ scale: 0.97 }}
-                  >
-                    Continue
-                    <ArrowRight size={15} />
-                  </motion.button>
-                </motion.div>
+
 
                 {!hideGenerateButton && (
                   <div className="pt-2 pb-3">
