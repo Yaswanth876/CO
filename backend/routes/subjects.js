@@ -1,19 +1,19 @@
-/**
- * Subject Management Routes
- */
-
 const express = require('express');
 const router = express.Router();
-const { Subject, Configuration } = require('../models');
+const { Subject, Configuration, FacultyCourseAssignment } = require('../models');
 const { getSubjectStatus } = require('../utils/phaseTracker');
 
 /**
  * POST /api/subjects
- * Create a new subject
+ * Create a new subject - ADMIN ONLY
  */
 router.post('/', async (req, res, next) => {
   try {
-    const { subject_code, subject_name, academic_year, semester } = req.body;
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Faculty cannot create courses' });
+    }
+
+    const { subject_code, subject_name, academic_year, semester, regulation } = req.body;
     const userId = req.user.id;
 
     if (!subject_code || !subject_name) {
@@ -22,11 +22,11 @@ router.post('/', async (req, res, next) => {
 
     // Check for duplicate
     const existing = await Subject.findOne({
-      where: { user_id: userId, subject_code }
+      where: { subject_code }
     });
 
     if (existing) {
-      return res.status(400).json({ error: 'Subject already exists for this user' });
+      return res.status(400).json({ error: 'Subject already exists' });
     }
 
     // Create subject
@@ -36,6 +36,7 @@ router.post('/', async (req, res, next) => {
       subject_name,
       academic_year,
       semester,
+      regulation,
       current_phase: 0
     });
 
@@ -62,15 +63,27 @@ router.post('/', async (req, res, next) => {
 
 /**
  * GET /api/subjects
- * List all subjects for logged-in user
+ * List all subjects (assigned only for faculty, all for admin)
  */
 router.get('/', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const subjects = await Subject.findAll({
-      where: { user_id: userId },
-      order: [['created_at', 'DESC']]
-    });
+    let subjects = [];
+
+    if (req.user.role === 'admin') {
+      subjects = await Subject.findAll({
+        order: [['created_at', 'DESC']]
+      });
+    } else {
+      // Find assigned courses
+      const assignments = await FacultyCourseAssignment.findAll({
+        where: { faculty_id: userId },
+        include: [{ model: Subject, as: 'course' }]
+      });
+      subjects = assignments
+        .map(a => a.course)
+        .filter(c => c && c.status !== 'archived');
+    }
 
     // Get status for each subject
     const results = await Promise.all(
@@ -109,9 +122,23 @@ router.get('/:id', async (req, res, next) => {
     const { id } = req.params;
     const userId = req.user.id;
 
-    const subject = await Subject.findOne({
-      where: { id, user_id: userId }
-    });
+    let isAssigned = false;
+    if (req.user.role === 'admin') {
+      isAssigned = true;
+    } else {
+      const assignment = await FacultyCourseAssignment.findOne({
+        where: { faculty_id: userId, course_id: id }
+      });
+      if (assignment) {
+        isAssigned = true;
+      }
+    }
+
+    if (!isAssigned) {
+      return res.status(403).json({ error: 'You are not assigned to this course' });
+    }
+
+    const subject = await Subject.findByPk(id);
 
     if (!subject) {
       return res.status(404).json({ error: 'Subject not found' });
@@ -133,26 +160,27 @@ router.get('/:id', async (req, res, next) => {
 
 /**
  * PUT /api/subjects/:id
- * Update subject details
+ * Update subject details - ADMIN ONLY
  */
 router.put('/:id', async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const userId = req.user.id;
-    const { subject_name, academic_year, semester } = req.body;
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Faculty cannot edit courses' });
+    }
 
-    const subject = await Subject.findOne({
-      where: { id, user_id: userId }
-    });
+    const { id } = req.params;
+    const { subject_name, academic_year, semester, regulation } = req.body;
+
+    const subject = await Subject.findByPk(id);
 
     if (!subject) {
       return res.status(404).json({ error: 'Subject not found' });
     }
 
-    // Update allowed fields only
     if (subject_name) subject.subject_name = subject_name;
     if (academic_year) subject.academic_year = academic_year;
     if (semester !== undefined) subject.semester = semester;
+    if (regulation) subject.regulation = regulation;
 
     await subject.save();
 
@@ -167,16 +195,16 @@ router.put('/:id', async (req, res, next) => {
 
 /**
  * DELETE /api/subjects/:id
- * Archive a subject (soft delete)
+ * Archive a subject - ADMIN ONLY
  */
 router.delete('/:id', async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const userId = req.user.id;
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Faculty cannot archive courses' });
+    }
 
-    const subject = await Subject.findOne({
-      where: { id, user_id: userId }
-    });
+    const { id } = req.params;
+    const subject = await Subject.findByPk(id);
 
     if (!subject) {
       return res.status(404).json({ error: 'Subject not found' });

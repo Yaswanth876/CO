@@ -33,6 +33,9 @@ module.exports = (sequelize, Sequelize) => {
     semester: {
       type: DataTypes.INTEGER
     },
+    regulation: {
+      type: DataTypes.STRING(50)
+    },
     current_phase: {
       type: DataTypes.INTEGER,
       defaultValue: 0

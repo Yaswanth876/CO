@@ -23,6 +23,7 @@ const phase2Routes = require('./routes/phase2');
 const phase3Routes = require('./routes/phase3');
 const reportRoutes = require('./routes/reports');
 const configRoutes = require('./routes/configuration');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 
@@ -34,13 +35,35 @@ const app = express();
 app.use(morgan('combined'));
 
 // CORS
-const corsOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()).filter(Boolean)
-  : true;
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173'
+];
+
+if (process.env.CORS_ORIGIN) {
+  process.env.CORS_ORIGIN.split(',').forEach(origin => {
+    const trimmed = origin.trim();
+    if (trimmed && !allowedOrigins.includes(trimmed)) {
+      allowedOrigins.push(trimmed);
+    }
+  });
+}
 
 app.use(cors({
-  origin: corsOrigins,
-  credentials: false
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    
+    const isLocalhost = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    if (isLocalhost || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    return callback(null, false);
+  },
+  credentials: true
 }));
 
 // Body parsing
@@ -87,6 +110,7 @@ app.use('/api/phase2', authMiddleware, phase2Routes);
 app.use('/api/phase3', authMiddleware, phase3Routes);
 app.use('/api/reports', authMiddleware, reportRoutes);
 app.use('/api/configuration', authMiddleware, configRoutes);
+app.use('/api/admin', adminRoutes);
 
 // ============================================================
 // ERROR HANDLING
@@ -104,7 +128,13 @@ const PORT = process.env.PORT || 5000;
 async function start() {
   try {
     // Sync database
-    await sequelize.sync({ alter: false });
+    if (sequelize.getDialect() === 'sqlite') {
+      await sequelize.query('PRAGMA foreign_keys = OFF;');
+    }
+    await sequelize.sync();
+    if (sequelize.getDialect() === 'sqlite') {
+      await sequelize.query('PRAGMA foreign_keys = ON;');
+    }
     console.log('✓ Database synchronized');
 
     await ensureDevFacultySeed();

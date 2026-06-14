@@ -1,0 +1,572 @@
+# CO Attainment Automation System (COAS)
+## Complete Knowledge Transfer & System Architecture Document
+
+> [!NOTE]
+> This document serves as the master knowledge transfer guide for the CO Attainment Automation System. It is designed for new developers, systems engineers, and technical stakeholders to fully understand the architecture, data structures, workflows, and operations of the project.
+
+---
+
+## 1. Project Overview
+
+### Project Name
+**CO Attainment Automation System (COAS)**
+
+### Business Purpose & Problem Being Solved
+In higher education institutions (specifically engineering colleges under Tier-I NBA accreditation such as TCE), computing Course Outcome (CO) attainment is a mandatory but highly tedious, error-prone, and time-consuming manual process. 
+- Faculty members receive raw student grade sheets from the College Management System (CAMU) in Excel format.
+- They also have question papers in Word format (.docx) with question-wise CO mappings.
+- Calculating attainment involves manually extracting questions, identifying their corresponding CO tags, mapping student marks to each question, weighting assessments (Continuous Assessment Tests CAT1 and CAT2, Assignments, and Term End Examinations), applying thresholds (Target Attainment ELA and Expected Percentage EP), and generating final attainment matrices.
+- **COAS automates this end-to-end pipeline.** It ingests Word question papers, OCRs diagrams/text, parses structure, accepts grade exports, runs mathematical calculations in Python, and updates a React-based workspace.
+
+### Target Users
+- **Faculty / Course Instructors**: Primary users who configure subjects, upload raw documents, review interim dashboards, and export formatted reports.
+- **Academic Auditors / HODs**: Reviewers who track attainment metrics across courses for accreditation audits.
+
+### Core Features
+1. **Multi-Phase Incremental Attainment Workflow**:
+   - **Phase 1 (Early-Sem)**: Ingests CAT1 Question Paper (.docx) and CAT1 Student Marks (.xlsx). Auto-generates an early-sem attainment & student feedback report.
+   - **Phase 2 (Mid-Sem)**: Ingests CAT2 Question Paper, CAT2 Student Marks, Assignment 1, and Assignment 2. Consolidates them into an interim attainment report.
+   - **Phase 3 (End-Sem)**: Ingests Terminal Exam Marks, applies ELA / EP configuration thresholds, and computes final CO Attainment (70% Internal + 30% Terminal).
+2. **Document Parsing & OCR Engine**: Extracts structured metadata, questions, max marks, and CO tags from MS Word documents, with fallback OCR (Tesseract) for scanned components.
+3. **EP / ELA Configuration Panel**: Dynamic configuration of expected percentages and Target Attainment per CO.
+4. **Persistent Workspace Tracking**: Multi-user JWT authentication allowing teachers to resume their workspaces without losing intermediate state.
+
+### Current Project Status
+- **Backend**: Complete and stable. Runs an Express.js API linked to an SQLite database via Sequelize ORM, orchestrating Python-based calculation stages using child process execution.
+- **Frontend**: Fully functional React + Vite single-page application styled with Tailwind CSS and animated using Framer Motion. 
+
+### Future Roadmap
+1. **Multi-Section Consolidation**: Automating batch aggregation across multiple sections of the same course.
+2. **Direct CAMU Integration**: Fetching student grade rosters directly via API rather than manual Excel uploads.
+3. **Institutional Reporting Dashboard**: Providing departmental and institutional trends of CO attainment over academic years.
+
+### Major Challenges Solved
+- **Varied Document Styles**: Solved using layout-aware paragraph/table extraction combined with OCR fallback for question papers.
+- **Strict 40-Mark Assignment Constraint**: Reconciling the institutional rule that assignments must sum to exactly 40 marks by auto-adjusting weights in Python scripts.
+- **Long-Running Process Handling**: Implementing robust status tracking (pending → processing → success/failed) on files to handle script timeouts.
+
+---
+
+## System Architecture
+
+```mermaid
+graph TD
+    A[React Frontend] <-->|HTTP / JWT| B[Express.js REST API]
+    B <-->|Sequelize ORM| C[(SQLite Database)]
+    B -->|Child Process JSON I/O| D[Python Engine]
+    D -->|docx / openpyxl / pandas| E[docx Question Papers]
+    D -->|pandas / openpyxl| F[CAMU Excel Grade Sheets]
+    D -->|Tesseract OCR| G[Tesseract Binary]
+    B -->|Static File Serving| H[Uploads / Outputs Directory]
+```
+
+### High-Level Workflow
+1. User logs in, creates/selects a subject, and initiates Phase 1.
+2. User uploads CAT1 Question Paper and CAT1 Marks.
+3. Node server runs `stage1_qp.py` to parse the question paper into an intermediate Excel file, and then runs `stage2_marks.py` to inject student marks.
+4. User uploads Phase 2 files (CAT2 QP/Marks, Assignments) and consolidates them via `stage3_consolidate.py` (which copies marks into a master Excel template).
+5. User enters Terminal marks, adjusts thresholds, and runs `stage4_attainment.py` to compute final attainment metrics.
+
+---
+
+## 2. Technology Stack
+
+### Frontend
+- **Framework**: React 18+ (bootstrapped with Vite)
+- **Libraries**:
+  - `Lucide React` (modern icon pack)
+  - `Framer Motion` (fluid micro-animations)
+  - `clsx` & `tailwind-merge` (conditional class styling helper)
+- **State Management**: React Context API & React Local State (`useState`, `useEffect`)
+- **Styling**: Tailwind CSS (with bespoke glassmorphic colors)
+- **Build Tools**: Vite, ESBuild
+
+### Backend
+- **Runtime**: Node.js 18+
+- **Framework**: Express.js (REST API architecture)
+- **Database ORM**: Sequelize ORM (configured with SQLite)
+- **File Management**: Multer (file upload parser and validator)
+- **Execution Orchestration**: Child Process API (`spawn`)
+- **Log Management**: Morgan HTTP Request Logger
+
+### Data Processing Pipeline (Python Engine)
+- **Language**: Python 3.8+
+- **Libraries**:
+  - `python-docx` (Word document structural analysis)
+  - `pandas` (high-performance data manipulation)
+  - `openpyxl` (direct read/write manipulation of Excel spreadsheets)
+  - `pytesseract` & `Pillow` (OCR engine integration for question paper images)
+
+---
+
+## 3. Folder Structure
+
+```text
+CO/
+├── backend/
+│   ├── config/             # Database connection setups
+│   ├── middleware/         # Auth, Upload, and Error handling middleware
+│   ├── models/             # Sequelize database models & index definitions
+│   ├── routes/             # REST endpoints (auth, subjects, configuration, phases, reports)
+│   ├── uploads/            # Temporary/persistent raw files uploaded by faculty
+│   ├── outputs/            # Generated Excel spreadsheets and finalized reports
+│   ├── utils/              # Python executor, file manager, phase tracker
+│   ├── server.js           # Node application entry point
+│   ├── stage1_qp.py        # Question paper parsing script
+│   ├── stage2_marks.py     # Student marks injection script
+│   ├── stage3_consolidate.py# Master template consolidation script
+│   ├── stage4_attainment.py# Final attainment calculation script
+│   └── utils.py            # Shared python utilities
+└── frontend/
+    ├── public/             # Static public assets
+    └── src/
+        ├── components/
+        │   ├── layout/     # File uploads, parameter settings, navbar, sidebar components
+        │   └── ui/         # Buttons, cards, dropdowns, inputs, labels
+        ├── lib/            # Axios API wrappers and animation configurations
+        ├── pages/          # Workspace, Dashboard, Reports, Login, Profile, Settings pages
+        ├── App.jsx         # App routing and layout shell
+        └── main.jsx        # React entry point
+```
+
+### Key Folder Rules
+- `backend/uploads`: **Only** raw files uploaded by Multer belong here. Never store processed files or logs in this folder.
+- `backend/outputs`: **Only** system-generated spreadsheets belong here.
+- `frontend/src/lib`: Internal configurations, theme configs, or API wrappers go here. Never store stateful component files in this folder.
+
+---
+
+## 4. Application Entry Points
+
+### 1. Backend Bootstrapping (`backend/server.js`)
+When `npm start` or `npm run dev` is executed:
+1. **Environment Config**: Load variables from `.env` via `dotenv`.
+2. **Middleware Initialization**: Mount Morgan (logging), CORS (with localhost/domain filtering), and express JSON parsers.
+3. **Routing Setup**: Register public auth routes, then attach authentication middleware (`authMiddleware`) for protected routes (`/api/subjects`, `/api/phase1`, `/api/phase2`, `/api/phase3`, `/api/configuration`, `/api/reports`).
+4. **Database Connection**: Initialize Sequelize and synchronize schemas (`sequelize.sync({ alter: false })`).
+5. **Seeding Dev Accounts**: Initialize default TCE faculty seed credentials automatically if running in dev environment.
+6. **Server Activation**: Start HTTP listener on `PORT` (default 5000).
+
+### 2. Frontend Bootstrapping (`frontend/src/main.jsx`)
+1. Ingests `index.html`.
+2. Mounts React root onto `<div id="root">`.
+3. Injects global stylesheet `frontend/src/index.css`.
+4. Renders `<App />` within React Router provider.
+
+---
+
+## 5. Routing Analysis
+
+### Frontend Routes
+All frontend routes are declared inside [App.jsx](file:///d:/College%20Project/CO/frontend/src/App.jsx):
+
+| URL Path | Component | Purpose | Access Level |
+|---|---|---|---|
+| `/login` | `Login.jsx` | User authentication interface | Public |
+| `/` | `Dashboard.jsx` | User dashboard displaying subjects list | Protected |
+| `/subject/:id` | `SubjectWorkspace.jsx` | Active workspace to manage phases 1, 2, and 3 | Protected |
+| `/reports` | `Reports.jsx` | Download center for generated reports | Protected |
+| `/profile` | `Profile.jsx` | View user metadata and department details | Protected |
+| `/settings` | `Settings.jsx` | Change user password | Protected |
+
+---
+
+### Backend Routes
+
+Detailed in [API_DOCUMENTATION.md](file:///d:/College%20Project/CO/backend/API_DOCUMENTATION.md):
+
+#### 1. Authentication (`/api/auth`)
+- `POST /register`: Registers new faculty. Expects `{ email, password, full_name }`.
+- `POST /login`: Validates password, returns Bearer JWT. Expects `{ email, password }`.
+- `POST /dev-login`: Bypasses password check in dev mode for `@tce.edu` emails.
+- `POST /change-password`: Updates password. Requires old and new passwords.
+
+#### 2. Subjects (`/api/subjects`)
+- `POST /`: Creates a new subject workspace. Expects `{ subject_code, subject_name, academic_year, semester }`.
+- `GET /`: Lists all subjects owned by the authenticated user.
+- `GET /:id`: Retrieves detailed phase indicators and files for a single subject.
+- `DELETE /:id`: Archives/deletes the subject workspace.
+
+#### 3. Configuration (`/api/configuration`)
+- `GET /:subject_id`: Fetches EP, ELA (CO1-CO6), and Constraint settings.
+- `PUT /:subject_id`: Creates or updates configuration settings.
+
+#### 4. Processing Phase 1 (`/api/phase1`)
+- `POST /upload-qp`: Uploads CAT1 DOCX Question Paper.
+- `POST /upload-marks`: Uploads CAT1 CAMU Grade Excel.
+- `POST /upload-assignment`: Uploads Assignment 1 Grade Excel.
+- `POST /process`: Triggers `stage1_qp`, `stage2_marks`, `stage3_consolidate` (early), and `stage4_attainment` (early) to generate the Early-Sem Report.
+
+#### 5. Processing Phase 2 (`/api/phase2`)
+- `POST /upload`: Uploads CAT2 QP, CAT2 Marks, or ASS2 Marks.
+- `POST /process`: Triggers Stage 1 & 2 for CAT2, Stage 3 (mid), and Stage 4 (mid) to output the Mid-Sem Report.
+
+#### 6. Processing Phase 3 (`/api/phase3`)
+- `POST /upload-terminal-qp`: Uploads Terminal Exam Question Paper.
+- `POST /upload-terminal`: Uploads Terminal Grade Excel.
+- `POST /finalize`: Runs final CO attainment calculations using internal and terminal data, marks subject status as `completed`.
+
+---
+
+## 6. Authentication and Authorization
+
+### Token Architecture
+- Uses **Stateless JSON Web Tokens (JWT)**.
+- Signed with a server-side secret (`process.env.JWT_SECRET`) using the `HS256` hashing algorithm.
+- Expiration is set to **7 days**.
+- Payload structure:
+  ```json
+  {
+    "id": 1,
+    "email": "faculty@tce.edu",
+    "role": "faculty",
+    "iat": 1718000000,
+    "exp": 1718604800
+  }
+  ```
+
+### Middlewares
+`backend/middleware/auth.js` enforces authentication:
+1. Ingests request headers looking for `Authorization: Bearer <token>`.
+2. Verifies token integrity via `jwt.verify()`.
+3. Attaches verified user object to `req.user`.
+4. Returns `401 Unauthorized` if validation fails or token is expired.
+
+---
+
+## 7. Database Architecture
+
+The backend database runs SQLite in both development and production. 
+
+```mermaid
+erDiagram
+    users {
+        int id PK
+        string email UK
+        string password_hash
+        string full_name
+        string role
+        datetime created_at
+        datetime updated_at
+    }
+    subjects {
+        int id PK
+        int user_id FK
+        string subject_code
+        string subject_name
+        string academic_year
+        int semester
+        int current_phase
+        string status
+        datetime created_at
+        datetime updated_at
+    }
+    files {
+        int id PK
+        int subject_id FK
+        string file_type
+        string original_filename
+        string stored_filename
+        string file_path
+        int file_size
+        int uploaded_by FK
+        string processing_status
+        text processing_error
+        datetime created_at
+        datetime updated_at
+    }
+    configurations {
+        int id PK
+        int subject_id FK
+        decimal ep
+        decimal constraint_value
+        decimal ela_co1
+        decimal ela_co2
+        decimal ela_co3
+        decimal ela_co4
+        decimal ela_co5
+        decimal ela_co6
+        datetime created_at
+        datetime updated_at
+    }
+    intermediate_outputs {
+        int id PK
+        int subject_id FK
+        int stage_number
+        string output_type
+        string file_path
+        boolean is_latest
+        datetime created_at
+    }
+    processing_logs {
+        int id PK
+        int subject_id FK
+        int stage_number
+        string status
+        text input_files
+        string output_file
+        text error_message
+        int execution_time_ms
+        datetime created_at
+    }
+
+    users ||--o{ subjects : owns
+    subjects ||--o{ files : references
+    subjects ||--o| configurations : configures
+    subjects ||--o{ intermediate_outputs : generates
+    subjects ||--o{ processing_logs : tracks
+```
+
+---
+
+## 8. API Architecture & Execution flow
+
+All Python automation scripts are executed from Node.js routes via the helper module [pythonExecutor.js](file:///d:/College%20Project/CO/backend/utils/pythonExecutor.js).
+
+```text
+HTTP Route Request (Node)
+        ↓
+Validate User ownership and file existence
+        ↓
+Instantiate Child Process (spawn python candidate)
+        ↓
+Serialize options arguments as a JSON string
+        ↓
+Pipe JSON string directly via command-line arguments to script
+        ↓
+Monitor STDOUT (collect JSON payload) & STDERR (collect errors)
+        ↓
+Parse STDOUT JSON → Resolve/Reject Promise
+```
+
+---
+
+## 9. State Management
+
+The frontend utilizes React's built-in state management architecture:
+- **Global Auth & UI State**: Controlled inside `App.jsx` and shared via local browser storage (`localStorage`) and standard callbacks. 
+- **Workspace Navigation State**: Handled directly inside `SubjectWorkspace.jsx` by checking the subject's `current_phase` flag (0, 1, 2, or 3) returned from `/api/subjects/:id`.
+- **Dynamic File Sync**: Polled/refreshed during uploads to toggle status indicators (Pending/Processing/Success) for individual files.
+
+---
+
+## 10. Data Flow Analysis (Phase 1 Process Feature)
+
+Below is the execution pipeline for processing Phase 1:
+
+```mermaid
+sequenceDiagram
+    participant UI as React UI (Workspace)
+    participant API as Express API (/phase1/process)
+    participant PE as Python Executor
+    participant DB as SQLite DB
+    participant S1 as stage1_qp.py
+    participant S2 as stage2_marks.py
+    participant S3 as stage3_consolidate.py (early)
+    participant S4 as stage4_attainment.py (early)
+
+    UI->>API: POST /api/phase1/process (subject_id)
+    API->>DB: Fetch subject, configuration, & files
+    DB-->>API: Return DB rows
+    API->>DB: Update File processing_status to 'processing'
+    API->>PE: runStage1(qp.docx, qp_output.xlsx)
+    PE->>S1: Spawn python stage1
+    S1-->>PE: Return {"status": "ok"}
+    API->>PE: runStage2(qp_output.xlsx, marks.xlsx)
+    PE->>S2: Spawn python stage2
+    S2-->>PE: Return {"status": "ok"}
+    API->>DB: Save intermediate 'CAT1_FINAL' output
+    API->>PE: runStage3(early phase, template, CAT1_FINAL, ASS1)
+    PE->>S3: Spawn python stage3
+    S3-->>PE: Return {"status": "ok"}
+    API->>PE: runStage4(early phase, ep, constraint, ela)
+    PE->>S4: Spawn python stage4
+    S4-->>PE: Return {"status": "ok"}
+    API->>DB: Save 'EARLY_SEM_REPORT' output, increment current_phase to 1
+    API-->>UI: Return 200 OK + output_path
+    UI->>UI: Refresh page, show success & early-sem report download link
+```
+
+---
+
+## 11. Important Features Deep Dive
+
+### 1. Document Parsing & Layout Detection (`stage1_qp.py`)
+- **How it works**: Reads Word file structures using `python-docx`. It iterates over tables, identifies course metadata, and extracts question rows.
+- **OCR Fallback**: If key data is embedded within diagrams or shapes, the script renders images from the Word relationships file and runs OCR via Tesseract.
+- **Edge cases**: If headers are missing, it searches using regular expressions (e.g. `r"CO\d"`).
+
+### 2. Assignment Total 40-Mark Business Constraint (`stage3_consolidate.py`)
+- **The Rule**: Institutional policy requires total assignment marks to equal exactly 40. However, teachers may evaluate assignments out of a different total (e.g., 20 or 30).
+- **The Solution**: 
+  - `process_assignment` reads column marks, finds the maximum mark for each question column, and sums them.
+  - It calculates `diff = 40 - current_sum`.
+  - It automatically adds/subtracts the diff to the last column's maximum marks in row 7 of the template, ensuring the final sum is exactly 40.
+
+### 3. Early/Mid Feedback Generation (`stage4_attainment.py`)
+- **How it works**: In `early` and `mid` phases, final exams are not yet available. The system creates a temporary report using internal marks.
+- **Feedback Tab**: It checks the average percentage of internal marks across all COs for each student. If it is less than the EP (Expected Percentage, default 80%), the student's ID, Name, and Marks are written to a dedicated "Feedback" sheet for early academic intervention.
+
+---
+
+## 12. Configuration and Environment Variables
+
+Configuration is handled via `.env` files in both backend and frontend.
+
+### Backend `.env`
+
+| Variable | Purpose | Recommended Value | Impact if Missing |
+|---|---|---|---|
+| `PORT` | Listening Port | `5000` | Defaults to 5000 |
+| `SQLITE_DB_PATH` | Path to SQLite DB | `./attainment.db` | Defaults to `./attainment.db` |
+| `JWT_SECRET` | Secret key to sign tokens | Secure hash | Defaults to `dev_secret` (Unsafe) |
+| `UPLOADS_DIR` | Raw uploads directory | `./uploads` | Defaults to `./uploads` |
+| `OUTPUTS_DIR` | Report output directory | `./outputs` | Defaults to `./outputs` |
+| `PYTHON_STAGE_DIR` | Python scripts path | `./` (root) | Defaults to backend root |
+| `TESSERACT_CMD` | Binary path for OCR | `C:/Program Files/Tesseract-OCR/tesseract.exe` | OCR features will crash on Windows |
+| `PYTHON_BIN` | Python command | `python` or `python3` | Fallback loop triggers |
+
+### Frontend `.env`
+- `VITE_API_BASE_URL`: Base API path (e.g., `http://localhost:5000`). If missing, defaults to using window host details on port 5000.
+
+---
+
+## 13. Deployment Architecture
+
+```text
+Developer Git Push
+       ↓
+CI Pipeline (Tests & Linting)
+       ↓
+Package Application & Build Frontend (npm run build)
+       ↓
+Deploy to Server (Local College Server / Cloud Instance)
+       ↓
+Nginx (Reverse Proxy & Static Asset Server)
+  ├── Static requests (/) -> serve frontend/dist
+  └── API requests (/api) -> proxy pass to Node.js (port 5000)
+```
+
+### Rollback Procedures
+1. Keep the previous production build folder (`dist_old`).
+2. If the new release fails, update Nginx config to point back to `dist_old` and restart Nginx.
+3. Restoring databases: Use daily SQLite file backups. Copy the latest backup back to `attainment.db`.
+
+---
+
+## 14. CI/CD Pipeline
+- **Branches**:
+  - `main`: Production-ready release branch.
+  - `develop`: Pre-release testing branch.
+- **Build**: Compiles JSX assets into static HTML/JS/CSS bundles in `frontend/dist`.
+- **Test**: Run verification tests on Python processing engines before deployment.
+
+---
+
+## 15. Error Handling Strategy
+
+### Backend
+- Global error-handling middleware (`backend/middleware/errorHandler.js`) catches all unhandled exceptions.
+- It returns consistent JSON error payloads:
+  ```json
+  {
+    "status": "error",
+    "error": "Short readable error message"
+  }
+  ```
+- File-upload exceptions (from Multer size/type limits) are intercepted and returned as `400 Bad Request`.
+
+### Frontend
+- API responses are processed through a central request wrapper (`frontend/src/lib/api.js`).
+- If the backend returns a `401 Unauthorized` (e.g. token expired), the wrapper triggers a `coas-auth-expired` custom event.
+- React catches this event, clears local storage, and redirects the user to the login screen.
+
+---
+
+## 16. Security Analysis
+
+1. **SQL Injection**: Parameterized SQL queries are used via Sequelize ORM, preventing raw SQL execution.
+2. **XSS Protection**: React escapes JSX values by default.
+3. **CORS (Cross-Origin Resource Sharing)**: Restricts API access to authorized domains via CORS middleware configurations.
+4. **File Upload Security**: Multer limits upload size to 50MB and validates file extensions (only `.docx` and `.xlsx` are allowed). Uploaded files are renamed using unique UUIDs to prevent directory traversal and file overwriting.
+
+---
+
+## 17. Performance Optimization
+
+- **Database Indexes**: Indexing on `user_id` and unique index on `(user_id, subject_code)` speeds up query lookups.
+- **Automatic File Cleanup**: The system retains only the 5 latest versions of each file type per subject, preventing server disk space exhaustion.
+- **Python Execution Timeout**: A 300-second execution limit prevents orphaned Python child processes from consuming CPU cycles in the background.
+
+---
+
+## 18. Testing Strategy
+
+- **Manual Verification**: Run integration workflows by starting both servers and walking through the 3 phases.
+- **Test Script Execution**: Validate Python parsers by running:
+  ```powershell
+  python stage1_qp.py "{\"docx_path\": \"test_qp.docx\", \"output_path\": \"output_test.xlsx\"}"
+  ```
+
+---
+
+## 19. Known Issues and Technical Debt
+
+1. **OCR Performance**: Tesseract OCR can slow down Phase 1 processing if the question paper contains many images. This is ranked as **Medium Priority**.
+2. **File Deletion Lag**: If a processing run fails, some temporary files may remain on the disk. This is ranked as **Low Priority**.
+
+---
+
+## 20. Feature Development Guide
+
+### How to Add a New Feature (e.g., Assignment 3 support)
+1. **Database Update**: Update `Subject.js` or `File.js` validations to allow `'ASS3'` file type.
+2. **API Route Update**: Add `ASS3` file validation checks in `backend/routes/phase2.js`.
+3. **Python Consolidation Update**: Update `stage3_consolidate.py` to copy ASS3 data into the master template.
+4. **UI Workspace Update**: Add a file upload slot for Assignment 3 in the workspace UI.
+
+---
+
+## 21. Debugging Guide
+
+### Common Issues
+1. **Python Script Crashes**: Check that the configured `PYTHON_BIN` (in `.env`) exists and is accessible.
+2. **Tesseract Binary Not Found**: Verify the `TESSERACT_CMD` environment variable points to a valid tesseract executable.
+3. **401 Unauthorized Redirects**: Ensure the client sends the authorization header correctly: `Authorization: Bearer <token>`.
+
+---
+
+## 22. Project Ownership Checklist
+
+- [x] Create a new subject and verify it displays in the dashboard database list.
+- [x] Upload CAT1 files and verify they process successfully.
+- [x] Adjust configuration parameters (EP/ELA) and verify the changes are saved.
+- [x] Run Phase 3 finalization and download the generated attainment sheet.
+
+---
+
+## 23. Architecture Diagrams
+
+### 1. Final Attainment Formula Flow
+
+```text
+Internal Attainment (70%)             Terminal Attainment (30%)
+          ↓                                       ↓
+   Sheet2 Columns E-J                      Sheet2 Columns L-Q
+          └───────────────────┬───────────────────┘
+                              ↓
+              Final CO Attainment (Columns S-X)
+                 [ =0.7*Internal + 0.3*Terminal ]
+```
+
+---
+
+## 24. Senior Developer Notes
+
+> [!WARNING]
+> Do not change row and column mapping indices in Python files without validating the spreadsheet templates. Excel formulas are mapped to exact cell coordinates.
+
+- **Formula Rewriting**: `stage4_attainment.py` copies formulas from Sheet1 to Sheet2 and adds the `Sheet1!` prefix. If you modify Sheet1's layout, make sure to update `src_start` in the python script.
+- **Excel Cell Formats**: If cells are read as string formulas instead of evaluated float values, the calculation scripts will fail. Always load workbooks with `data_only=True` when reading values, and `data_only=False` when modifying cells with formulas.
+
+---

@@ -8,6 +8,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { User } = require('../models');
 const { DEV_ALLOWED_EMAILS, DEV_PASSWORD, ensureDevFacultySeed } = require('../utils/devSeed');
+const { logActivity } = require('../utils/activityLogger');
+const { authMiddleware } = require('../middleware/auth');
 
 /**
  * POST /api/auth/register
@@ -70,6 +72,10 @@ router.post('/login', async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    if (!user.is_active) {
+      return res.status(401).json({ error: 'Account is deactivated' });
+    }
+
     // Check password
     const isValid = await bcrypt.compare(password, user.password_hash);
     if (!isValid) {
@@ -86,6 +92,8 @@ router.post('/login', async (req, res, next) => {
       process.env.JWT_SECRET || 'dev_secret',
       { expiresIn: '7d' }
     );
+
+    await logActivity(user.id, 'Login');
 
     res.json({
       status: 'success',
@@ -126,6 +134,12 @@ router.post('/dev-login', async (req, res, next) => {
 
     const user = await User.findOne({ where: { email } });
 
+    if (!user.is_active) {
+      return res.status(401).json({ error: 'Account is deactivated' });
+    }
+
+    await logActivity(user.id, 'Login (Dev)');
+
     const token = jwt.sign(
       {
         id: user.id,
@@ -155,20 +169,36 @@ router.post('/dev-login', async (req, res, next) => {
  * POST /api/auth/logout
  * Logout (client-side only in JWT)
  */
-router.post('/logout', (req, res) => {
+router.post('/logout', authMiddleware, async (req, res) => {
+  await logActivity(req.user.id, 'Logout');
   res.json({ status: 'success', message: 'Logged out' });
+});
+
+/**
+ * GET /api/auth/me
+ * Validate token and get current logged-in user info
+ */
+router.get('/me', authMiddleware, async (req, res) => {
+  res.json({
+    status: 'success',
+    user: req.user
+  });
 });
 
 /**
  * POST /api/auth/change-password
  * Change account password
  */
-router.post('/change-password', async (req, res, next) => {
+router.post('/change-password', authMiddleware, async (req, res, next) => {
   try {
     const { email, currentPassword, newPassword } = req.body;
 
     if (!email || !currentPassword || !newPassword) {
       return res.status(400).json({ error: 'Email, current password and new password are required' });
+    }
+
+    if (req.user.email !== email) {
+      return res.status(403).json({ error: 'You can only change your own password' });
     }
 
     if (String(newPassword).length < 8) {
@@ -188,7 +218,40 @@ router.post('/change-password', async (req, res, next) => {
     user.password_hash = await bcrypt.hash(newPassword, 10);
     await user.save();
 
+    await logActivity(req.user.id, 'Password Change');
+
     res.json({ status: 'success', message: 'Password updated successfully' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/auth/update-profile
+ * Update profile name
+ */
+router.post('/update-profile', authMiddleware, async (req, res, next) => {
+  try {
+    const { name } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+    const user = await User.findByPk(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    user.full_name = name;
+    await user.save();
+    await logActivity(req.user.id, 'Profile Update', { name });
+    res.json({
+      status: 'success',
+      user: {
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        role: user.role
+      }
+    });
   } catch (error) {
     next(error);
   }

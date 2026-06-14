@@ -17,6 +17,13 @@ export default function Dashboard() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(""), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
+  useEffect(() => {
     async function loadSubjects() {
       try {
         const data = await getSubjects();

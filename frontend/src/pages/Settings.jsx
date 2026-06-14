@@ -38,6 +38,13 @@ export default function Settings({ user }) {
   const [messageType, setMessageType] = useState("idle");
 
   useEffect(() => {
+    if (passwordMessage) {
+      const timer = setTimeout(() => setPasswordMessage(""), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [passwordMessage]);
+
+  useEffect(() => {
     async function loadProfile() {
       if (!user?.email) {
         return;

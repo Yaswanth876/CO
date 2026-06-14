@@ -5,17 +5,19 @@ const API_BASE_URL =
 const TOKEN_KEY = "coas-token";
 
 function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  return localStorage.getItem(TOKEN_KEY) || localStorage.getItem("token");
 }
 
 function setToken(token) {
   if (token) {
     localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem("token", token);
   }
 }
 
 function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem("token");
 }
 
 async function request(path, options = {}) {
@@ -331,8 +333,134 @@ export function getSubjectReports(subjectId) {
   return request(`/api/reports/${subjectId}`).then((data) => data.reports || []);
 }
 
+export function getFaculty() {
+  return request("/api/admin/faculty").then((data) => data.faculty || []);
+}
+
+export function addFaculty(name, email, password) {
+  return request("/api/admin/faculty", {
+    method: "POST",
+    body: JSON.stringify({ name, email, password }),
+  });
+}
+
+export function editFaculty(id, payload) {
+  return request(`/api/admin/faculty/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function resetFacultyPassword(id, password) {
+  return request(`/api/admin/faculty/${id}/reset-password`, {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+}
+
+export function getAdminCourses() {
+  return request("/api/admin/courses").then((data) => data.courses || []);
+}
+
+export function addCourse(payload) {
+  return request("/api/admin/courses", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function editCourse(id, payload) {
+  return request(`/api/admin/courses/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function archiveCourse(id) {
+  return request(`/api/admin/courses/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export function getAssignments() {
+  return request("/api/admin/assignments").then((data) => data.assignments || []);
+}
+
+export function addAssignment(faculty_id, course_id) {
+  return request("/api/admin/assignments", {
+    method: "POST",
+    body: JSON.stringify({ faculty_id, course_id }),
+  });
+}
+
+export function removeAssignment(id) {
+  return request(`/api/admin/assignments/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export function getAllReports() {
+  return request("/api/admin/reports").then((data) => data.reports || []);
+}
+
+export function reviewReport(id, action) {
+  return request(`/api/admin/reports/${id}/review`, {
+    method: "POST",
+    body: JSON.stringify({ action }),
+  });
+}
+
+export function getActivityLogs() {
+  return request("/api/admin/activity-logs").then((data) => data.logs || []);
+}
+
+export function submitReportToAdmin(id) {
+  return request(`/api/reports/${id}/submit`, {
+    method: "POST",
+  });
+}
+
+export function unsubmitReport(id) {
+  return request(`/api/reports/${id}/unsubmit`, {
+    method: "POST",
+  });
+}
+
+export function getFacultyReports() {
+  return request("/api/reports/faculty/my-reports").then((data) => data.reports || []);
+}
+
+export function updateFacultyProfile(name) {
+  return request("/api/auth/update-profile", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function downloadReportFile(reportId, reportName = "report") {
+  const token = getToken();
+  const response = await fetch(`${API_BASE_URL}/api/reports/download-file/${reportId}`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!response.ok) {
+    throw new Error("Download failed");
+  }
+  const blob = await response.blob();
+  return { blob, suggestedName: `${reportName}.xlsx` };
+}
+
 export function logout() {
   clearToken();
+  localStorage.removeItem("coas-user");
+  localStorage.removeItem("role");
+  localStorage.removeItem("userId");
+  localStorage.removeItem("userName");
+}
+
+export function getMe() {
+  return request("/api/auth/me").then((data) => data.user);
 }
 
 export function getApiBaseUrl() {

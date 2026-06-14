@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Mail, Lock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
@@ -18,6 +18,13 @@ function Login({ onLogin }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(""), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   const handleLogin = async () => {
     setError("");
     setLoading(true);
@@ -32,7 +39,7 @@ function Login({ onLogin }) {
     try {
       const user = await devLogin(email, password);
       onLogin?.(user);
-      navigate("/dashboard");
+      navigate("/");
     } catch (loginError) {
       setError(loginError.message || "Login failed.");
     } finally {
@@ -202,9 +209,9 @@ const prefersReducedMotion = useReducedMotion();
       )}
 
       <motion.div variants={itemVariants} className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600">
-        <p className="font-semibold text-slate-700">Dev login mode</p>
-        <p>Use: faculty1@tce.edu or faculty2@tce.edu</p>
-        <p>Password: tce123</p>
+        <p className="font-semibold text-slate-700">Seeded Credentials</p>
+        <p>Admin: admin@tce.edu / admin123</p>
+        <p>Faculty: faculty1@tce.edu or faculty2@tce.edu (Password: tce123)</p>
       </motion.div>
 
       <motion.div variants={itemVariants}>

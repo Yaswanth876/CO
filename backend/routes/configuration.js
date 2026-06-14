@@ -1,10 +1,6 @@
-/**
- * Configuration Routes - EP, ELA, Constraint
- */
-
 const express = require('express');
 const router = express.Router();
-const { Subject, Configuration } = require('../models');
+const { Subject, Configuration, FacultyCourseAssignment } = require('../models');
 
 const defaultConfigurationValues = {
   ep: 80.00,
@@ -17,6 +13,26 @@ const defaultConfigurationValues = {
   ela_co6: 78.00
 };
 
+async function checkCourseAssignment(userId, role, subjectId) {
+  let isAssigned = false;
+  if (role === 'admin') {
+    isAssigned = true;
+  } else {
+    const assignment = await FacultyCourseAssignment.findOne({
+      where: { faculty_id: userId, course_id: subjectId }
+    });
+    isAssigned = !!assignment;
+  }
+  if (!isAssigned) {
+    throw new Error('Forbidden');
+  }
+  const subject = await Subject.findByPk(subjectId);
+  if (!subject) {
+    throw new Error('NotFound');
+  }
+  return subject;
+}
+
 /**
  * GET /api/configuration/:subject_id
  * Get configuration for a subject
@@ -26,13 +42,13 @@ router.get('/:subject_id', async (req, res, next) => {
     const { subject_id } = req.params;
     const userId = req.user.id;
 
-    // Verify subject ownership
-    const subject = await Subject.findOne({
-      where: { id: subject_id, user_id: userId }
-    });
-
-    if (!subject) {
-      return res.status(404).json({ error: 'Subject not found' });
+    let subject;
+    try {
+      subject = await checkCourseAssignment(userId, req.user.role, subject_id);
+    } catch (err) {
+      if (err.message === 'Forbidden') return res.status(403).json({ error: 'You are not assigned to this course' });
+      if (err.message === 'NotFound') return res.status(404).json({ error: 'Subject not found' });
+      throw err;
     }
 
     const [config] = await Configuration.findOrCreate({
@@ -74,13 +90,13 @@ router.put('/:subject_id', async (req, res, next) => {
     const userId = req.user.id;
     const { ep, constraint, ela } = req.body;
 
-    // Verify subject ownership
-    const subject = await Subject.findOne({
-      where: { id: subject_id, user_id: userId }
-    });
-
-    if (!subject) {
-      return res.status(404).json({ error: 'Subject not found' });
+    let subject;
+    try {
+      subject = await checkCourseAssignment(userId, req.user.role, subject_id);
+    } catch (err) {
+      if (err.message === 'Forbidden') return res.status(403).json({ error: 'You are not assigned to this course' });
+      if (err.message === 'NotFound') return res.status(404).json({ error: 'Subject not found' });
+      throw err;
     }
 
     const [config] = await Configuration.findOrCreate({

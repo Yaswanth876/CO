@@ -8,11 +8,32 @@ const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
 
-const { Subject, File, Configuration, IntermediateOutput, ProcessingLog } = require('../models');
+const { Subject, File, Configuration, IntermediateOutput, ProcessingLog, FacultyCourseAssignment, Report } = require('../models');
 const { uploadErrorHandler } = require('../middleware/upload');
 const { runStage1, runStage2, runStage3, runStage4 } = require('../utils/pythonExecutor');
 const { fileExists, getFileSizeMB, generateFilename, deleteFile } = require('../utils/fileManager');
 const { updateSubjectPhase, validatePhaseFiles } = require('../utils/phaseTracker');
+const { logActivity } = require('../utils/activityLogger');
+
+async function checkCourseAssignment(userId, role, subjectId) {
+  let isAssigned = false;
+  if (role === 'admin') {
+    isAssigned = true;
+  } else {
+    const assignment = await FacultyCourseAssignment.findOne({
+      where: { faculty_id: userId, course_id: subjectId }
+    });
+    isAssigned = !!assignment;
+  }
+  if (!isAssigned) {
+    throw new Error('Forbidden');
+  }
+  const subject = await Subject.findByPk(subjectId);
+  if (!subject) {
+    throw new Error('NotFound');
+  }
+  return subject;
+}
 
 /**
  * POST /api/phase1/upload-qp
@@ -27,13 +48,13 @@ router.post('/upload-qp', uploadErrorHandler, async (req, res, next) => {
       return res.status(400).json({ error: 'Subject ID and file required' });
     }
 
-    // Verify subject ownership
-    const subject = await Subject.findOne({
-      where: { id: subject_id, user_id: userId }
-    });
-
-    if (!subject) {
-      return res.status(404).json({ error: 'Subject not found' });
+    let subject;
+    try {
+      subject = await checkCourseAssignment(userId, req.user.role, subject_id);
+    } catch (err) {
+      if (err.message === 'Forbidden') return res.status(403).json({ error: 'You are not assigned to this course' });
+      if (err.message === 'NotFound') return res.status(404).json({ error: 'Subject not found' });
+      throw err;
     }
 
     // Create file record
@@ -49,6 +70,8 @@ router.post('/upload-qp', uploadErrorHandler, async (req, res, next) => {
       uploaded_by: userId,
       processing_status: 'pending'
     });
+
+    await logActivity(userId, 'Marks Upload', { course_id: subject_id, file_type: 'CAT1_QP' });
 
     res.status(201).json({
       status: 'success',
@@ -80,12 +103,13 @@ router.post('/upload-marks', uploadErrorHandler, async (req, res, next) => {
       return res.status(400).json({ error: 'Subject ID and file required' });
     }
 
-    const subject = await Subject.findOne({
-      where: { id: subject_id, user_id: userId }
-    });
-
-    if (!subject) {
-      return res.status(404).json({ error: 'Subject not found' });
+    let subject;
+    try {
+      subject = await checkCourseAssignment(userId, req.user.role, subject_id);
+    } catch (err) {
+      if (err.message === 'Forbidden') return res.status(403).json({ error: 'You are not assigned to this course' });
+      if (err.message === 'NotFound') return res.status(404).json({ error: 'Subject not found' });
+      throw err;
     }
 
     const fileSizeMB = getFileSizeMB(req.file.path);
@@ -100,6 +124,8 @@ router.post('/upload-marks', uploadErrorHandler, async (req, res, next) => {
       uploaded_by: userId,
       processing_status: 'pending'
     });
+
+    await logActivity(userId, 'Marks Upload', { course_id: subject_id, file_type: 'CAT1_MARKS' });
 
     res.status(201).json({
       status: 'success',
@@ -130,12 +156,13 @@ router.post('/upload-assignment', uploadErrorHandler, async (req, res, next) => 
       return res.status(400).json({ error: 'Subject ID and file required' });
     }
 
-    const subject = await Subject.findOne({
-      where: { id: subject_id, user_id: userId }
-    });
-
-    if (!subject) {
-      return res.status(404).json({ error: 'Subject not found' });
+    let subject;
+    try {
+      subject = await checkCourseAssignment(userId, req.user.role, subject_id);
+    } catch (err) {
+      if (err.message === 'Forbidden') return res.status(403).json({ error: 'You are not assigned to this course' });
+      if (err.message === 'NotFound') return res.status(404).json({ error: 'Subject not found' });
+      throw err;
     }
 
     const fileSizeMB = getFileSizeMB(req.file.path);
@@ -150,6 +177,8 @@ router.post('/upload-assignment', uploadErrorHandler, async (req, res, next) => 
       uploaded_by: userId,
       processing_status: 'pending'
     });
+
+    await logActivity(userId, 'Marks Upload', { course_id: subject_id, file_type: 'ASS1' });
 
     res.status(201).json({
       status: 'success',
@@ -178,12 +207,13 @@ router.post('/process', async (req, res, next) => {
     const { subject_id } = req.body;
     const userId = req.user.id;
 
-    const subject = await Subject.findOne({
-      where: { id: subject_id, user_id: userId }
-    });
-
-    if (!subject) {
-      return res.status(404).json({ error: 'Subject not found' });
+    let subject;
+    try {
+      subject = await checkCourseAssignment(userId, req.user.role, subject_id);
+    } catch (err) {
+      if (err.message === 'Forbidden') return res.status(403).json({ error: 'You are not assigned to this course' });
+      if (err.message === 'NotFound') return res.status(404).json({ error: 'Subject not found' });
+      throw err;
     }
 
     // Get required files
@@ -322,6 +352,21 @@ router.post('/process', async (req, res, next) => {
       output_type: 'EARLY_SEM_REPORT',
       file_path: earlyReportPath,
       is_latest: true
+    });
+
+    // Create Report record
+    await Report.create({
+      faculty_id: userId,
+      course_id: subject_id,
+      report_file_path: earlyReportPath,
+      report_name: `${subject.subject_code}_EARLY_SEM_REPORT`,
+      status: 'Generated',
+      generated_at: new Date()
+    });
+
+    await logActivity(userId, 'Report Generation', {
+      course_id: subject_id,
+      report_type: 'Early-sem'
     });
 
     // Update phase

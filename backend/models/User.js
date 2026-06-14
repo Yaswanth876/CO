@@ -29,6 +29,11 @@ module.exports = (sequelize, Sequelize) => {
     role: {
       type: DataTypes.ENUM('faculty', 'admin'),
       defaultValue: 'faculty'
+    },
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+      allowNull: false
     }
   }, {
     tableName: 'users',

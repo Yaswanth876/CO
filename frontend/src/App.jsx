@@ -10,7 +10,8 @@ import Profile from "./pages/Profile";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import SubjectWorkspace from "./pages/SubjectWorkspace";
-import { logout } from "./lib/api";
+import AdminDashboard from "./pages/AdminDashboard";
+import { logout, getMe } from "./lib/api";
 
 /** Wraps the nested Outlet with AnimatePresence keyed on location */
 function AnimatedOutlet() {
@@ -44,6 +45,7 @@ function DashboardLayout({ user, onLogout }) {
 
       <div className="pt-24 md:pt-20">
         <Sidebar
+          user={user}
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
           collapsed={sidebarCollapsed}
@@ -66,25 +68,41 @@ function DashboardLayout({ user, onLogout }) {
 }
 
 function App() {
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(() => {
+    const cachedUser = localStorage.getItem("coas-user");
+    if (cachedUser) {
+      try {
+        return JSON.parse(cachedUser);
+      } catch {
+        localStorage.removeItem("coas-user");
+      }
+    }
+    return null;
+  });
 
   useEffect(() => {
-    const cachedUser = localStorage.getItem("coas-user");
-    if (!cachedUser) {
-      return;
-    }
-
-    try {
-      setCurrentUser(JSON.parse(cachedUser));
-    } catch {
-      localStorage.removeItem("coas-user");
+    const token = localStorage.getItem("token") || localStorage.getItem("coas-token");
+    if (token) {
+      getMe()
+        .then((user) => {
+          setCurrentUser(user);
+          localStorage.setItem("coas-user", JSON.stringify(user));
+          localStorage.setItem("role", user.role);
+          localStorage.setItem("userId", user.id);
+          localStorage.setItem("userName", user.full_name || "");
+        })
+        .catch(() => {
+          handleLogout();
+        });
+    } else {
+      setCurrentUser(null);
     }
   }, []);
 
   useEffect(() => {
     const handleAuthExpired = () => {
       setCurrentUser(null);
-      localStorage.removeItem("coas-user");
+      logout();
     };
 
     window.addEventListener("coas-auth-expired", handleAuthExpired);
@@ -94,17 +112,32 @@ function App() {
   const handleLogin = (user) => {
     setCurrentUser(user);
     localStorage.setItem("coas-user", JSON.stringify(user));
+    localStorage.setItem("role", user.role);
+    localStorage.setItem("userId", user.id);
+    localStorage.setItem("userName", user.full_name || "");
   };
 
   const handleLogout = () => {
     logout();
     setCurrentUser(null);
-    localStorage.removeItem("coas-user");
   };
 
   return (
     <Routes>
-      <Route path="/" element={<Navigate to={currentUser ? "/dashboard" : "/login"} replace />} />
+      <Route
+        path="/"
+        element={
+          currentUser ? (
+            currentUser.role === "admin" ? (
+              <Navigate to="/admin/dashboard" replace />
+            ) : (
+              <Navigate to="/faculty/dashboard" replace />
+            )
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
       <Route path="/login" element={<Login onLogin={handleLogin} />} />
       <Route
         element={
@@ -114,7 +147,26 @@ function App() {
           />
         }
       >
-        <Route path="/dashboard" element={<Dashboard user={currentUser} />} />
+        <Route
+          path="/admin/dashboard"
+          element={
+            currentUser?.role === "admin" ? (
+              <AdminDashboard user={currentUser} />
+            ) : (
+              <Navigate to="/faculty/dashboard" replace />
+            )
+          }
+        />
+        <Route
+          path="/faculty/dashboard"
+          element={
+            currentUser?.role === "faculty" ? (
+              <Dashboard user={currentUser} />
+            ) : (
+              <Navigate to="/admin/dashboard" replace />
+            )
+          }
+        />
         <Route path="/subjects" element={<SubjectWorkspace user={currentUser} />} />
         <Route path="/subjects/:subjectCode/workspace" element={<SubjectWorkspace user={currentUser} />} />
         <Route path="/profile" element={<Profile user={currentUser} />} />

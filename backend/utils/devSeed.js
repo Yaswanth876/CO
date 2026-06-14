@@ -3,7 +3,7 @@
  */
 
 const bcrypt = require('bcrypt');
-const { User, Subject, Configuration } = require('../models');
+const { User, Subject, Configuration, FacultyCourseAssignment } = require('../models');
 
 const DEV_ALLOWED_EMAILS = new Set(['faculty1@tce.edu', 'faculty2@tce.edu']);
 const DEV_PASSWORD = 'tce123';
@@ -57,6 +57,19 @@ async function ensureDevFacultySeed() {
 
   const passwordHash = await bcrypt.hash(DEV_PASSWORD, 10);
 
+  // Seed default Admin
+  const adminEmail = 'admin@tce.edu';
+  let admin = await User.findOne({ where: { email: adminEmail } });
+  if (!admin) {
+    await User.create({
+      email: adminEmail,
+      password_hash: await bcrypt.hash('admin123', 10),
+      full_name: 'System Admin',
+      role: 'admin',
+      is_active: true
+    });
+  }
+
   for (const email of DEV_ALLOWED_EMAILS) {
     let user = await User.findOne({ where: { email } });
 
@@ -65,7 +78,8 @@ async function ensureDevFacultySeed() {
         email,
         password_hash: passwordHash,
         full_name: email.split('@')[0],
-        role: 'faculty'
+        role: 'faculty',
+        is_active: true
       });
     }
 
@@ -85,6 +99,19 @@ async function ensureDevFacultySeed() {
           semester: seed.semester,
           current_phase: 0,
           status: 'active'
+        }
+      });
+
+      // Seed assignments for compatibility
+      await FacultyCourseAssignment.findOrCreate({
+        where: {
+          faculty_id: user.id,
+          course_id: subject.id
+        },
+        defaults: {
+          faculty_id: user.id,
+          course_id: subject.id,
+          assigned_by: admin ? admin.id : user.id
         }
       });
 
