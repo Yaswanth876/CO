@@ -3,8 +3,13 @@
  */
 
 require('dotenv').config();
+const path = require('path');
 
-const sqliteStoragePath = process.env.SQLITE_DB_PATH || './attainment.db';
+const backendRoot = path.resolve(__dirname, '..');
+const sqliteDbPath = process.env.SQLITE_DB_PATH || 'attainment.db';
+const sqliteStoragePath = path.isAbsolute(sqliteDbPath)
+  ? sqliteDbPath
+  : path.resolve(backendRoot, sqliteDbPath);
 
 module.exports = {
   development: {

@@ -26,6 +26,12 @@ const configRoutes = require('./routes/configuration');
 const adminRoutes = require('./routes/admin');
 
 const app = express();
+const backendRoot = path.resolve(__dirname);
+
+function resolveBackendPath(configuredPath, fallbackPath) {
+  const targetPath = configuredPath || fallbackPath;
+  return path.isAbsolute(targetPath) ? targetPath : path.resolve(backendRoot, targetPath);
+}
 
 // ============================================================
 // MIDDLEWARE SETUP
@@ -51,6 +57,13 @@ if (process.env.CORS_ORIGIN) {
   });
 }
 
+if (process.env.FRONTEND_URL) {
+  const trimmedFrontendUrl = process.env.FRONTEND_URL.trim();
+  if (trimmedFrontendUrl && !allowedOrigins.includes(trimmedFrontendUrl)) {
+    allowedOrigins.push(trimmedFrontendUrl);
+  }
+}
+
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl)
@@ -71,12 +84,12 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Ensure upload/output directories exist
-ensureDir(process.env.UPLOADS_DIR || './uploads');
-ensureDir(process.env.OUTPUTS_DIR || './outputs');
+ensureDir(resolveBackendPath(process.env.UPLOADS_DIR, 'uploads'));
+ensureDir(resolveBackendPath(process.env.OUTPUTS_DIR, 'outputs'));
 
 // Serve static files (for downloading reports)
-app.use('/outputs', express.static(process.env.OUTPUTS_DIR || './outputs'));
-app.use('/uploads', express.static(process.env.UPLOADS_DIR || './uploads'));
+app.use('/outputs', express.static(resolveBackendPath(process.env.OUTPUTS_DIR, 'outputs')));
+app.use('/uploads', express.static(resolveBackendPath(process.env.UPLOADS_DIR, 'uploads')));
 
 // ============================================================
 // PUBLIC ROUTES (No authentication required)
@@ -144,9 +157,9 @@ async function start() {
     app.listen(PORT, () => {
       console.log(`✓ Server running on port ${PORT}`);
       console.log(`✓ Mode: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`✓ Uploads dir: ${process.env.UPLOADS_DIR || './uploads'}`);
-      console.log(`✓ Outputs dir: ${process.env.OUTPUTS_DIR || './outputs'}`);
-      console.log(`✓ Python stage dir: ${process.env.PYTHON_STAGE_DIR || './python'}`);
+      console.log(`✓ Uploads dir: ${resolveBackendPath(process.env.UPLOADS_DIR, 'uploads')}`);
+      console.log(`✓ Outputs dir: ${resolveBackendPath(process.env.OUTPUTS_DIR, 'outputs')}`);
+      console.log(`✓ Python stage dir: ${process.env.PYTHON_STAGE_DIR || '.'}`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);

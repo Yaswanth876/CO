@@ -13,6 +13,11 @@ const { fileExists, getFileSizeMB, deleteFile } = require('../utils/fileManager'
 const { updateSubjectPhase } = require('../utils/phaseTracker');
 const { logActivity } = require('../utils/activityLogger');
 
+function resolveOutputsDir() {
+  const configured = process.env.OUTPUTS_DIR || 'outputs';
+  return path.isAbsolute(configured) ? configured : path.resolve(__dirname, '..', configured);
+}
+
 async function checkCourseAssignment(userId, role, subjectId) {
   let isAssigned = false;
   if (role === 'admin') {
@@ -282,7 +287,7 @@ router.post('/finalize', async (req, res, next) => {
     terminalFile.processing_status = 'processing';
     await terminalFile.save();
 
-    const outputsDir = process.env.OUTPUTS_DIR || './outputs';
+    const outputsDir = resolveOutputsDir();
     const finalOutput = path.join(outputsDir, `CO_ATTAINMENT_COMPLETE_${subject_id}_${Date.now()}.xlsx`);
 
     let stage4Result;

@@ -16,14 +16,19 @@ from docx.table import _Cell, Table
 from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls
 import pandas as pd
-import pytesseract
-from PIL import Image
+try:
+    import pytesseract
+    from PIL import Image
+    HAS_OCR = True
+except ImportError:
+    HAS_OCR = False
 from utils import validate_file_exists, find_value_after_keyword
 
 
-tesseract_cmd = os.getenv("TESSERACT_CMD")
-if tesseract_cmd:
-    pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+if HAS_OCR:
+    tesseract_cmd = os.getenv("TESSERACT_CMD")
+    if tesseract_cmd:
+        pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
 
 
 def read_docx(docx_path):
@@ -60,6 +65,9 @@ def ocr_from_doc(docx_path):
         OCR text string
     """
     try:
+        if not HAS_OCR:
+            return ""
+            
         doc = Document(docx_path)
         ocr_text = ""
 

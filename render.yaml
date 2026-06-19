@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: co-attainment-backend
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && python3 -m venv venv && ./venv/bin/pip install -r requirements.txt
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SQLITE_DB_PATH
+        value: ./attainment.db
+      - key: UPLOADS_DIR
+        value: ./uploads
+      - key: OUTPUTS_DIR
+        value: ./outputs
+      - key: PYTHON_STAGE_DIR
+        value: ./
+      - key: PYTHON_BIN
+        value: ./venv/bin/python
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
