@@ -1,3 +1,19 @@
+# Node.js
+node_modules/
+package-lock.json
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# SQLite Database
+*.db
+*.sqlite
+*.sqlite3
+*-journal
+attainment.db
+
 # Python / Virtual Environment
 __pycache__/
 *.py[cod]
@@ -27,6 +43,9 @@ temp.png
 
 # Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Test data
 test_*.xlsx
