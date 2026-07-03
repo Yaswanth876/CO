@@ -202,18 +202,23 @@ body {
 
 /* ─── Upload row ───────────────────────────────────────────────── */
 .upload-row {
-	transition: background-color 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+	transition: background-color 0.18s ease, box-shadow 0.18s ease,
+		border-color 0.18s ease, transform 0.18s ease;
 }
 
 .upload-row:hover {
-	border-color: #fca5a5;
-	box-shadow: 0 4px 14px -6px rgba(127, 29, 29, 0.18);
+	box-shadow: 0 4px 16px -6px rgba(127, 29, 29, 0.12);
 	transform: translateY(-1px);
 }
 
 .upload-row.uploaded {
-	border-color: #bbf7d0;
+	border-color: #6ee7b7;
 	background-color: #f0fdf4;
+}
+
+.upload-row:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.18);
 }
 
 /* ─── Status badge animations ──────────────────────────────────── */

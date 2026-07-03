@@ -35,9 +35,9 @@ const workflowSteps = [
 ];
 
 const stageFiles = {
-  1: ["CAT1_QP", "CAT1_MARKS", "ASS1"],
-  2: ["CAT2_QP", "CAT2_MARKS", "ASS2"],
-  3: ["TERMINAL_QP", "TERMINAL"],
+  1: ["CAT1_MARKS", "ASS1"],
+  2: ["CAT2_MARKS", "ASS2"],
+  3: ["TERMINAL"],
 };
 
 export default function SubjectWorkspace({ user }) {
@@ -262,7 +262,6 @@ export default function SubjectWorkspace({ user }) {
         <StageUploadCard
           title="Early-sem"
           fields={[
-            { key: "CAT1_QP", label: "CAT 1 Question Paper (.docx)" },
             { key: "CAT1_MARKS", label: "CAT 1 Marksheet (.xlsx)" },
             { key: "ASS1", label: "Assignment 1 Marksheet (.xlsx)" }
           ]}
@@ -282,7 +281,6 @@ export default function SubjectWorkspace({ user }) {
         <StageUploadCard
           title="Mid-sem"
           fields={[
-            { key: "CAT2_QP", label: "CAT 2 Question Paper (.docx)" },
             { key: "CAT2_MARKS", label: "CAT 2 Marksheet (.xlsx)" },
             { key: "ASS2", label: "Assignment 2 Marksheet (.xlsx)" }
           ]}
@@ -302,7 +300,6 @@ export default function SubjectWorkspace({ user }) {
         <StageUploadCard
           title="End-sem & Parameters"
           fields={[
-            { key: "TERMINAL_QP", label: "Terminal Question Paper (.docx)" },
             { key: "TERMINAL", label: "Terminal Marksheet (.xlsx)" }
           ]}
           uploadedFiles={uploadedFiles}

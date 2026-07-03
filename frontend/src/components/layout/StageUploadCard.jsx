@@ -1,11 +1,18 @@
-import { CheckCircle2, Loader2, Upload } from "lucide-react";
-import { useState } from "react";
+import { CheckCircle2, CloudUpload, FileSpreadsheet, Loader2, Sparkles } from "lucide-react";
+import { useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Input } from "../ui/input";
 import { uploadWorkspaceFile } from "../../lib/api";
 import { cardVariants } from "../../lib/animations";
+
+/** Map file keys → icon + accent colour */
+function getFileStyle(key) {
+  if (key.includes("MARKS") || key.includes("ASS") || key === "TERMINAL") {
+    return { Icon: FileSpreadsheet, accent: "text-emerald-600", bg: "bg-emerald-50" };
+  }
+  return { Icon: CloudUpload, accent: "text-red-600", bg: "bg-red-50" };
+}
 
 export default function StageUploadCard({
   title,
@@ -22,150 +29,251 @@ export default function StageUploadCard({
   isCompleted,
   children,
 }) {
-  const [selectedFiles, setSelectedFiles] = useState({});
   const [uploadingKey, setUploadingKey] = useState("");
   const [uploadMessage, setUploadMessage] = useState("");
+  const [uploadError, setUploadError] = useState("");
+  const [dragOverKey, setDragOverKey] = useState("");
+  const inputRefs = useRef({});
+
+  const uploadedCount = fields.filter((f) => uploadedFiles[f.key]).length;
+  const progressPct = fields.length ? Math.round((uploadedCount / fields.length) * 100) : 0;
 
   const handleUpload = async (key, file) => {
-    if (!file) {
-      setUploadMessage("Please choose a file before uploading.");
-      return;
-    }
+    if (!file) return;
     if (!subjectId || !subjectCode || !user?.email) {
-      setUploadMessage("Subject context is not ready. Please refresh and try again.");
+      setUploadError("Subject context is not ready. Please refresh and try again.");
       return;
     }
 
     setUploadingKey(key);
     setUploadMessage("");
+    setUploadError("");
 
     try {
       const response = await uploadWorkspaceFile(subjectId, subjectCode, key, file);
       const nextFiles = { ...uploadedFiles, [key]: true };
       onUploadChange?.(nextFiles);
-      setUploadMessage(response.message || `${key} uploaded.`);
+      setUploadMessage(response.message || `${key} uploaded successfully.`);
     } catch (error) {
-      setUploadMessage(error.message || "Upload failed.");
+      setUploadError(error.message || "Upload failed.");
     } finally {
+      setUploadingKey(false);
       setUploadingKey("");
     }
   };
 
+  const handleDrop = (key, e) => {
+    e.preventDefault();
+    setDragOverKey("");
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleUpload(key, file);
+  };
+
   return (
     <motion.div variants={cardVariants}>
-      <Card className="border-red-100/80 shadow-[0_16px_35px_-32px_rgba(15,23,42,0.65)] overflow-hidden">
-        <CardHeader>
-          <div className="flex items-center justify-between gap-3">
-            <CardTitle className="flex items-center gap-2 text-red-950">
-              <Upload size={18} />
+      <Card className="border-slate-100 shadow-[0_8px_32px_-16px_rgba(15,23,42,0.12)] overflow-hidden">
+
+        {/* ── Header ── */}
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <CardTitle className="flex items-center gap-2.5 text-red-950 text-lg">
+              <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-50 text-red-700">
+                <CloudUpload size={16} />
+              </span>
               {title}
               <AnimatePresence>
                 {isCompleted && (
                   <motion.span
-                    className="ml-2 flex items-center gap-1 text-xs text-emerald-700"
-                    initial={{ opacity: 0, scale: 0.7 }}
-                    animate={{ opacity: 1, scale: 1 }}
+                    className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"
+                    initial={{ opacity: 0, scale: 0.7, x: -4 }}
+                    animate={{ opacity: 1, scale: 1, x: 0 }}
                     exit={{ opacity: 0, scale: 0.7 }}
-                    transition={{ type: "spring", stiffness: 280, damping: 20 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 22 }}
                   >
-                    <CheckCircle2 size={13} className="text-emerald-600" />
-                    Completed
+                    <CheckCircle2 size={11} />
+                    All set
                   </motion.span>
                 )}
               </AnimatePresence>
             </CardTitle>
+
+            {/* Progress pill */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-slate-500">
+                {uploadedCount}/{fields.length} uploaded
+              </span>
+              <div className="w-20 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                <motion.div
+                  className={`h-full rounded-full ${isCompleted ? "bg-emerald-500" : "bg-red-600"}`}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progressPct}%` }}
+                  transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+                />
+              </div>
+            </div>
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-5">
-          <div className="space-y-4">
+        <CardContent className="space-y-3 pt-0">
+
+          {/* ── Upload rows ── */}
+          <div className="space-y-2.5">
             {fields.map((item, idx) => {
               const isDone = !!uploadedFiles[item.key];
               const isUploading = uploadingKey === item.key;
+              const isDragOver = dragOverKey === item.key;
+              const { Icon, accent, bg } = getFileStyle(item.key);
 
               return (
                 <motion.div
                   key={item.key}
-                  className={`upload-row grid gap-3 rounded-xl border p-4 shadow-sm md:grid-cols-[1.4fr_2fr_auto] md:items-center ${
-                    isDone ? "uploaded border-emerald-200 bg-emerald-50/50" : "border-slate-200 bg-white"
-                  }`}
-                  initial={{ opacity: 0, x: -12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.04, duration: 0.3 }}
+                  className={`upload-row relative flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer group
+                    ${isDone
+                      ? "border-emerald-200 bg-emerald-50/60"
+                      : isDragOver
+                        ? "border-red-400 bg-red-50/60 scale-[1.01]"
+                        : "border-slate-200 bg-white hover:border-red-200 hover:bg-red-50/30"
+                    }`}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.06, duration: 0.3, ease: "easeOut" }}
+                  onDragOver={(e) => { e.preventDefault(); setDragOverKey(item.key); }}
+                  onDragLeave={() => setDragOverKey("")}
+                  onDrop={(e) => handleDrop(item.key, e)}
+                  onClick={() => !isUploading && inputRefs.current[item.key]?.click()}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === "Enter" && inputRefs.current[item.key]?.click()}
+                  aria-label={`Upload ${item.label}`}
                 >
-                  <p className="text-sm font-medium text-slate-700">
-                    Upload {item.label}
-                  </p>
+                  {/* Icon badge */}
+                  <span className={`flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg ${isDone ? "bg-emerald-100" : bg} transition-colors duration-200`}>
+                    {isUploading
+                      ? <Loader2 size={16} className="spinner text-blue-500" />
+                      : isDone
+                        ? <CheckCircle2 size={16} className="text-emerald-600" />
+                        : <Icon size={16} className={accent} />
+                    }
+                  </span>
 
-                  <Input
-                    type="file"
-                    className="input-focus-motion bg-slate-50 text-sm"
-                    disabled={isUploading}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0] || null;
-                      setSelectedFiles((prev) => ({ ...prev, [item.key]: file }));
-                      if (file) {
-                        handleUpload(item.key, file);
-                      }
-                    }}
-                  />
+                  {/* Label + sublabel */}
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-semibold leading-tight truncate ${isDone ? "text-emerald-800" : "text-slate-700"}`}>
+                      {item.label}
+                    </p>
+                    <p className="text-[11px] font-medium text-slate-400 mt-0.5">
+                      {isUploading
+                        ? "Uploading…"
+                        : isDone
+                          ? "File uploaded — click to replace"
+                          : isDragOver
+                            ? "Drop file here"
+                            : "Click or drag & drop to upload"}
+                    </p>
+                  </div>
 
+                  {/* Status badge */}
                   <AnimatePresence mode="wait">
                     {isUploading ? (
                       <motion.span
                         key="uploading"
-                        className="flex items-center gap-2 text-xs font-semibold text-blue-600"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
+                        className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-2.5 py-1 text-[11px] font-semibold text-blue-600"
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
                       >
-                        <Loader2 size={13} className="spinner" />
-                        Uploading...
+                        <Loader2 size={10} className="spinner" />
+                        Uploading
                       </motion.span>
                     ) : isDone ? (
                       <motion.span
                         key="done"
-                        className="flex items-center gap-1 text-xs font-semibold text-emerald-600"
+                        className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-200 px-2.5 py-1 text-[11px] font-semibold text-emerald-700"
                         initial={{ opacity: 0, scale: 0.6 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.6 }}
                         transition={{ type: "spring", stiffness: 300, damping: 18 }}
                       >
-                        <CheckCircle2 size={13} />
+                        <CheckCircle2 size={10} />
                         Uploaded
                       </motion.span>
                     ) : (
                       <motion.span
                         key="pending"
-                        className="text-xs font-medium text-slate-400"
+                        className="flex-shrink-0 inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-400"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                       >
-                        Not Uploaded
+                        Pending
                       </motion.span>
                     )}
                   </AnimatePresence>
+
+                  {/* Hidden file input */}
+                  <input
+                    ref={(el) => (inputRefs.current[item.key] = el)}
+                    type="file"
+                    className="sr-only"
+                    disabled={isUploading}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleUpload(item.key, file);
+                    }}
+                  />
                 </motion.div>
               );
             })}
           </div>
 
+          {/* ── Children (e.g. ParameterSection) ── */}
           {children}
 
+          {/* ── Generate button ── */}
           {generateLabel && onGenerate && (
-            <div className="flex items-center gap-3 pt-3 pb-1 border-t border-slate-100">
+            <div className="flex items-center gap-3 pt-4 mt-1 border-t border-slate-100">
               <Button
-                className="btn-press min-w-[220px]"
+                className="btn-press inline-flex items-center gap-2 min-w-[220px]"
                 onClick={onGenerate}
                 disabled={!canGenerate || isGenerating}
                 isLoading={isGenerating}
               >
-                {isGenerating ? "Generating..." : generateLabel}
+                {!isGenerating && <Sparkles size={14} />}
+                {isGenerating ? "Generating…" : generateLabel}
               </Button>
+              {!canGenerate && !isGenerating && (
+                <p className="text-xs text-slate-400">
+                  Upload all files to unlock
+                </p>
+              )}
             </div>
           )}
 
-          {uploadMessage ? <p className="text-xs text-slate-600">{uploadMessage}</p> : null}
+          {/* ── Feedback messages ── */}
+          <AnimatePresence>
+            {uploadMessage && (
+              <motion.p
+                key="msg"
+                className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2"
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+              >
+                ✓ {uploadMessage}
+              </motion.p>
+            )}
+            {uploadError && (
+              <motion.p
+                key="err"
+                className="text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+              >
+                ✕ {uploadError}
+              </motion.p>
+            )}
+          </AnimatePresence>
+
         </CardContent>
       </Card>
     </motion.div>

@@ -98,4 +98,4 @@ CREATE INDEX idx_logs_subject ON processing_logs(subject_id);
 
 -- Insert default admin user (password: admin123 - hash this in production!)
 INSERT INTO users (email, password_hash, full_name, role)
-VALUES ('admin@college.edu', '$2b$10$admin_hash_placeholder', 'System Admin', 'admin');
+VALUES ('admin@college.edu', '$2b$10$gcb8FF.RcRP61asWxN5ga.vSq70jQM2KUhFc6CHI8DAEpbFCnRDXO', 'System Admin', 'admin');
