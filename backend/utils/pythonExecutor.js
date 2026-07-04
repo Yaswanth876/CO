@@ -163,12 +163,19 @@ async function runStage1(docxPath, outputPath) {
 }
 
 /**
- * Run Stage 2: Student Marks Injection
+ * Run Stage 2: CAMU Marks Parser → QP Excel Builder (New Format)
+ *
+ * The new CAMU format embeds CO tags (row 2) and max marks (row 3) directly
+ * in the marks Excel, so a separate question-paper (DOCX / QP Excel) is no
+ * longer required.  Stage 2 now builds the Stage-3-compatible output itself.
+ *
+ * @param {string} marksPath   - Path to the CAMU marks Excel (.xlsx)
+ * @param {string} outputPath  - Path for the generated output Excel
  */
-async function runStage2(qpExcelPath, studentDbPath) {
+async function runStage2(marksPath, outputPath) {
   return runPythonStage('stage2_marks.py', {
-    qp_excel_path: qpExcelPath,
-    student_db_path: studentDbPath
+    student_db_path: marksPath,
+    output_path: outputPath
   });
 }
 

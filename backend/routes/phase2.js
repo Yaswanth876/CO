@@ -101,6 +101,9 @@ router.post('/upload', uploadErrorHandler, async (req, res, next) => {
 /**
  * POST /api/phase2/process
  * Process mid-sem files (CAT2 + ASS2) and generate the mid-sem report
+ *
+ * NEW CAMU FORMAT: CO tags are embedded in the CAT2 marks Excel (row 2),
+ * so Stage 1 (DOCX QP parsing) is no longer required for CAT2 either.
  */
 router.post('/process', async (req, res, next) => {
   const startTime = Date.now();
@@ -130,11 +133,8 @@ router.post('/process', async (req, res, next) => {
       return res.status(400).json({ error: 'Early-sem report must be completed first' });
     }
 
-    const cat2QpFile = await File.findOne({
-      where: { subject_id, file_type: 'CAT2_QP' },
-      order: [['created_at', 'DESC'], ['id', 'DESC']]
-    });
-
+    // CAT2_QP (DOCX) is no longer required — CO tags are embedded
+    // in the new CAMU CAT2 marks Excel format (row 2 = CO, row 3 = max marks).
     const cat2MarksFile = await File.findOne({
       where: { subject_id, file_type: 'CAT2_MARKS' },
       order: [['created_at', 'DESC'], ['id', 'DESC']]
@@ -145,45 +145,33 @@ router.post('/process', async (req, res, next) => {
       order: [['created_at', 'DESC'], ['id', 'DESC']]
     });
 
-    if (!cat2QpFile || !cat2MarksFile || !ass2File) {
-      return res.status(400).json({ error: 'CAT2 QP, CAT2 marks, and ASS2 files required' });
+    if (!cat2MarksFile || !ass2File) {
+      return res.status(400).json({ error: 'CAT2 marks and ASS2 files required' });
     }
 
-    if (!fileExists(cat2QpFile.file_path) || !fileExists(cat2MarksFile.file_path) || !fileExists(ass2File.file_path)) {
-      return res.status(400).json({ error: 'Uploaded CAT2 or ASS2 files not found' });
+    if (!fileExists(cat2MarksFile.file_path) || !fileExists(ass2File.file_path)) {
+      return res.status(400).json({ error: 'Uploaded CAT2 or ASS2 files not found on disk' });
     }
 
     const log = await ProcessingLog.create({
       subject_id,
       stage_number: 2,
       status: 'started',
-      input_files: JSON.stringify([earlyReport.file_path, cat2QpFile.file_path, cat2MarksFile.file_path, ass2File.file_path])
+      input_files: JSON.stringify([earlyReport.file_path, cat2MarksFile.file_path, ass2File.file_path])
     });
 
-    cat2QpFile.processing_status = 'processing';
     cat2MarksFile.processing_status = 'processing';
     ass2File.processing_status = 'processing';
-    await cat2QpFile.save();
     await cat2MarksFile.save();
     await ass2File.save();
 
     const outputsDir = resolveOutputsDir();
     const cat2OutputPath = path.join(outputsDir, `CAT2_FINAL_${subject_id}_${Date.now()}.xlsx`);
 
-    let stage1Result;
-    try {
-      stage1Result = await runStage1(cat2QpFile.file_path, cat2OutputPath);
-    } catch (error) {
-      throw new Error(`CAT2 stage 1 failed: ${error.error || error.message}`);
-    }
-
-    if (stage1Result.status !== 'ok') {
-      throw new Error(`CAT2 stage 1 error: ${stage1Result.message}`);
-    }
-
+    // Stage 2: Parse CAMU CAT2 marks → build Stage-3-compatible Excel
     let stage2Result;
     try {
-      stage2Result = await runStage2(cat2OutputPath, cat2MarksFile.file_path);
+      stage2Result = await runStage2(cat2MarksFile.file_path, cat2OutputPath);
     } catch (error) {
       throw new Error(`CAT2 stage 2 failed: ${error.error || error.message}`);
     }
@@ -192,9 +180,7 @@ router.post('/process', async (req, res, next) => {
       throw new Error(`CAT2 stage 2 error: ${stage2Result.message}`);
     }
 
-    cat2QpFile.processing_status = 'success';
     cat2MarksFile.processing_status = 'success';
-    await cat2QpFile.save();
     await cat2MarksFile.save();
 
     await IntermediateOutput.create({
@@ -312,7 +298,7 @@ router.post('/process', async (req, res, next) => {
       {
         where: {
           subject_id: req.body.subject_id,
-          file_type: { [Op.in]: ['CAT2_QP', 'CAT2_MARKS', 'ASS2'] },
+          file_type: { [Op.in]: ['CAT2_MARKS', 'ASS2'] },
           processing_status: 'processing'
         }
       }

@@ -71,11 +71,29 @@ def process_cat(cat_file, template_ws, template_start_col, template_end_col):
     # Match and write CO tags and max marks
     for q, tcol in template_q.items():
         if q in cat_q:
-            template_ws.cell(row=5, column=tcol).value = cat_co[q]
-            template_ws.cell(row=7, column=tcol).value = cat_max[q]
+            # Overwrite CO tag only if CAT file has a valid CO tag
+            new_co = cat_co[q]
+            if new_co and str(new_co).strip().upper().startswith("CO"):
+                co_val = str(new_co).strip().upper().replace("C0", "CO")
+                template_ws.cell(row=5, column=tcol).value = co_val
+            else:
+                # Keep template's existing CO tag, but normalize C0 to CO if present
+                curr_co = template_ws.cell(row=5, column=tcol).value
+                if curr_co:
+                    template_ws.cell(row=5, column=tcol).value = str(curr_co).strip().upper().replace("C0", "CO")
+
+            # Overwrite max marks only if CAT file has valid max marks
+            new_max = cat_max[q]
+            if new_max is not None:
+                template_ws.cell(row=7, column=tcol).value = new_max
         else:
-            template_ws.cell(row=5, column=tcol).value = None
+            # Question not in CAT file: clear max marks but keep/normalize CO tag if it exists
             template_ws.cell(row=7, column=tcol).value = None
+            curr_co = template_ws.cell(row=5, column=tcol).value
+            if curr_co:
+                template_ws.cell(row=5, column=tcol).value = str(curr_co).strip().upper().replace("C0", "CO")
+            else:
+                template_ws.cell(row=5, column=tcol).value = None
 
     # Write student marks
     for q, cat_col in cat_q.items():

@@ -203,7 +203,12 @@ router.post('/upload-assignment', uploadErrorHandler, async (req, res, next) => 
 
 /**
  * POST /api/phase1/process
- * Process CAT1 files (run Stage 1 & 2)
+ * Process CAT1 files (run Stage 2 → Stage 3 → Stage 4 early)
+ *
+ * NEW CAMU FORMAT: CO tags and max marks are embedded in the marks Excel
+ * itself (row 2 = CO tags, row 3 = max marks), so Stage 1 (DOCX QP parsing)
+ * is no longer required.  Stage 2 now builds the Stage-3-compatible output
+ * directly from the CAMU marks file.
  */
 router.post('/process', async (req, res, next) => {
   const startTime = Date.now();
@@ -221,12 +226,9 @@ router.post('/process', async (req, res, next) => {
       throw err;
     }
 
-    // Get required files
-    const qpFile = await File.findOne({
-      where: { subject_id, file_type: 'CAT1_QP' },
-      order: [['created_at', 'DESC'], ['id', 'DESC']]
-    });
-
+    // Get required files (CAT1 marks + Assignment 1)
+    // NOTE: CAT1_QP (DOCX) is no longer required — CO tags are embedded
+    //       in the new CAMU marks Excel format (row 2 = CO, row 3 = max marks).
     const marksFile = await File.findOne({
       where: { subject_id, file_type: 'CAT1_MARKS' },
       order: [['created_at', 'DESC'], ['id', 'DESC']]
@@ -237,13 +239,13 @@ router.post('/process', async (req, res, next) => {
       order: [['created_at', 'DESC'], ['id', 'DESC']]
     });
 
-    if (!qpFile || !marksFile || !ass1File) {
-      return res.status(400).json({ error: 'CAT1 QP, CAT1 marks, and ASS1 files required' });
+    if (!marksFile || !ass1File) {
+      return res.status(400).json({ error: 'CAT1 marks and ASS1 files required' });
     }
 
-    // Validate files exist
-    if (!fileExists(qpFile.file_path) || !fileExists(marksFile.file_path) || !fileExists(ass1File.file_path)) {
-      return res.status(400).json({ error: 'Upload files not found' });
+    // Validate files exist on disk
+    if (!fileExists(marksFile.file_path) || !fileExists(ass1File.file_path)) {
+      return res.status(400).json({ error: 'Upload files not found on disk' });
     }
 
     // Log processing start
@@ -251,37 +253,23 @@ router.post('/process', async (req, res, next) => {
       subject_id,
       stage_number: 1,
       status: 'started',
-      input_files: JSON.stringify([qpFile.file_path, marksFile.file_path, ass1File.file_path])
+      input_files: JSON.stringify([marksFile.file_path, ass1File.file_path])
     });
 
-    // Stage 1: Parse QP
-    qpFile.processing_status = 'processing';
-    await qpFile.save();
-
     const outputsDir = resolveOutputsDir();
-    const qpOutputPath = path.join(outputsDir, `QP_FINAL_${subject_id}_${Date.now()}.xlsx`);
 
-    let stage1Result;
-    try {
-      stage1Result = await runStage1(qpFile.file_path, qpOutputPath);
-    } catch (error) {
-      throw new Error(`Stage 1 failed: ${error.error || error.message}`);
-    }
-
-    if (stage1Result.status !== 'ok') {
-      throw new Error(`Stage 1 error: ${stage1Result.message}`);
-    }
-
-    qpFile.processing_status = 'success';
-    await qpFile.save();
-
-    // Stage 2: Inject marks
+    // -------------------------------------------------------------------
+    // Stage 2: Parse CAMU marks file → build Stage-3-compatible Excel
+    // (Stage 1 / DOCX QP parsing is no longer needed for the new format)
+    // -------------------------------------------------------------------
     marksFile.processing_status = 'processing';
     await marksFile.save();
 
+    const cat1OutputPath = path.join(outputsDir, `CAT1_FINAL_${subject_id}_${Date.now()}.xlsx`);
+
     let stage2Result;
     try {
-      stage2Result = await runStage2(qpOutputPath, marksFile.file_path);
+      stage2Result = await runStage2(marksFile.file_path, cat1OutputPath);
     } catch (error) {
       throw new Error(`Stage 2 failed: ${error.error || error.message}`);
     }
@@ -298,7 +286,7 @@ router.post('/process', async (req, res, next) => {
       subject_id,
       stage_number: 2,
       output_type: 'CAT1_FINAL',
-      file_path: qpOutputPath,
+      file_path: cat1OutputPath,
       is_latest: true
     });
 
@@ -321,7 +309,7 @@ router.post('/process', async (req, res, next) => {
     try {
       stage3Result = await runStage3({
         phase: 'early',
-        cat1Path: qpOutputPath,
+        cat1Path: cat1OutputPath,     // Stage 2 output (now built from CAMU marks)
         ass1Path: ass1File.file_path,
         outputPath: earlyStage3Path
       });
@@ -410,7 +398,7 @@ router.post('/process', async (req, res, next) => {
       {
         where: {
           subject_id: req.body.subject_id,
-          file_type: { [Op.in]: ['CAT1_QP', 'CAT1_MARKS'] },
+          file_type: { [Op.in]: ['CAT1_MARKS', 'ASS1'] },
           processing_status: 'processing'
         }
       }
