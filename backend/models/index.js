@@ -8,7 +8,6 @@ const UserModel = require('./User');
 const SubjectModel = require('./Subject');
 const FileModel = require('./File');
 const ConfigurationModel = require('./Configuration');
-const IntermediateOutputModel = require('./IntermediateOutput');
 const ProcessingLogModel = require('./ProcessingLog');
 const FacultyCourseAssignmentModel = require('./FacultyCourseAssignment');
 const ReportModel = require('./Report');
@@ -25,7 +24,6 @@ const User = UserModel(sequelize, Sequelize);
 const Subject = SubjectModel(sequelize, Sequelize);
 const File = FileModel(sequelize, Sequelize);
 const Configuration = ConfigurationModel(sequelize, Sequelize);
-const IntermediateOutput = IntermediateOutputModel(sequelize, Sequelize);
 const ProcessingLog = ProcessingLogModel(sequelize, Sequelize);
 const FacultyCourseAssignment = FacultyCourseAssignmentModel(sequelize, Sequelize);
 const Report = ReportModel(sequelize, Sequelize);
@@ -41,8 +39,6 @@ File.belongsTo(Subject, { foreignKey: 'subject_id', as: 'subject' });
 Subject.hasOne(Configuration, { foreignKey: 'subject_id', as: 'configuration' });
 Configuration.belongsTo(Subject, { foreignKey: 'subject_id', as: 'subject' });
 
-Subject.hasMany(IntermediateOutput, { foreignKey: 'subject_id', as: 'outputs' });
-IntermediateOutput.belongsTo(Subject, { foreignKey: 'subject_id', as: 'subject' });
 
 Subject.hasMany(ProcessingLog, { foreignKey: 'subject_id', as: 'logs' });
 ProcessingLog.belongsTo(Subject, { foreignKey: 'subject_id', as: 'subject' });
@@ -69,7 +65,6 @@ module.exports = {
   Subject,
   File,
   Configuration,
-  IntermediateOutput,
   ProcessingLog,
   FacultyCourseAssignment,
   Report,

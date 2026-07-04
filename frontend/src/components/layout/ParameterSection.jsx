@@ -76,13 +76,13 @@ export default function ParameterSection({
               <AnimatePresence>
                 {completed && (
                   <motion.span
-                    className="ml-2 flex items-center gap-1 text-xs text-emerald-700"
+                    className="ml-2 flex items-center gap-1 text-xs text-red-700"
                     initial={{ opacity: 0, scale: 0.7 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.7 }}
                     transition={{ type: "spring", stiffness: 280, damping: 20 }}
                   >
-                    <CheckCircle2 size={13} className="text-emerald-600" />
+                    <CheckCircle2 size={13} className="text-red-700" />
                     Completed
                   </motion.span>
                 )}

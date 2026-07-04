@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Check } from "lucide-react";
 import StageUploadCard from "../components/layout/StageUploadCard";
 import ParameterSection from "../components/layout/ParameterSection";
@@ -146,6 +146,15 @@ export default function SubjectWorkspace({ user }) {
   }
 
   useEffect(() => {
+    if (saveMessage) {
+      const timer = setTimeout(() => {
+        setSaveMessage("");
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [saveMessage]);
+
+  useEffect(() => {
     async function loadSubjects() {
       try {
         const data = await getSubjects();
@@ -258,6 +267,22 @@ export default function SubjectWorkspace({ user }) {
 
       <motion.div className="space-y-6" variants={containerVariants} initial="hidden" animate="visible">
         
+        <AnimatePresence>
+          {saveMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -10, height: 0 }}
+              animate={{ opacity: 1, y: 0, height: "auto" }}
+              exit={{ opacity: 0, y: -10, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="p-3 mb-2 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm font-medium shadow-[0_2px_10px_-4px_rgba(127,29,29,0.2)] flex items-center gap-2">
+                <Check size={16} className="text-red-700" />
+                {saveMessage}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Early Sem Group */}
         <StageUploadCard
           title="Early-sem"
@@ -343,15 +368,13 @@ export default function SubjectWorkspace({ user }) {
         <div>
           <button
             type="button"
-            className="btn-press inline-flex items-center gap-2 rounded-md bg-red-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/40 disabled:opacity-50"
+            className="btn-press inline-flex items-center gap-2 rounded-md bg-red-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/40 disabled:opacity-50"
             onClick={handleClearProcess}
             disabled={clearingProcess || generatingStage !== ""}
           >
             {clearingProcess ? "Clearing..." : "Clear the process"}
           </button>
         </div>
-
-        {saveMessage && <p className="text-sm font-medium text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200">{saveMessage}</p>}
       </motion.div>
     </motion.div>
   );

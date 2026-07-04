@@ -153,26 +153,6 @@ function runPythonStage(stageName, args, timeout = 300000) {
 }
 
 /**
- * Run Stage 1: Question Paper Parsing
- */
-async function runStage1(docxPath, outputPath) {
-  return runPythonStage('stage1_qp.py', {
-    docx_path: docxPath,
-    output_path: outputPath
-  });
-}
-
-/**
- * Run Stage 2: Student Marks Injection
- */
-async function runStage2(qpExcelPath, studentDbPath) {
-  return runPythonStage('stage2_marks.py', {
-    qp_excel_path: qpExcelPath,
-    student_db_path: studentDbPath
-  });
-}
-
-/**
  * Run Stage 3: Master Template Consolidation
  */
 async function runStage3(templatePath, cat1Path, cat2Path, ass1Path, ass2Path, outputPath, phase) {
@@ -230,8 +210,6 @@ async function runStage4(coAttainmentPath, terminalPath, outputPath, ep, constra
 
 module.exports = {
   runPythonStage,
-  runStage1,
-  runStage2,
   runStage3,
   runStage4
 };

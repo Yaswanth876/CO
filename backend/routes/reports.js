@@ -3,7 +3,7 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 
-const { Subject, File, IntermediateOutput, ProcessingLog, Configuration, FacultyCourseAssignment, Report } = require('../models');
+const { Subject, File, ProcessingLog, Configuration, FacultyCourseAssignment, Report } = require('../models');
 const { fileExists, deleteFile } = require('../utils/fileManager');
 const { logActivity } = require('../utils/activityLogger');
 
@@ -129,20 +129,28 @@ router.get('/:subject_id', async (req, res, next) => {
       throw err;
     }
 
-    const outputs = await IntermediateOutput.findAll({
-      where: { subject_id },
-      order: [['created_at', 'DESC']]
+    const outputs = await Report.findAll({
+      where: { course_id: subject_id },
+      order: [['generated_at', 'DESC']]
     });
 
-    const reports = outputs.map(o => ({
-      id: o.id,
-      stage: o.stage_number,
-      type: o.output_type,
-      file_path: o.file_path,
-      generated_at: o.created_at,
-      file_exists: fileExists(o.file_path),
-      download_url: `/api/reports/download/${o.id}`
-    }));
+    const reports = outputs.map(o => {
+      let mappedType = 'UNKNOWN';
+      let mappedStage = 1;
+      if (o.report_name.includes('EARLY_SEM_REPORT')) { mappedType = 'EARLY_SEM_REPORT'; mappedStage = 1; }
+      else if (o.report_name.includes('MID_SEM_REPORT')) { mappedType = 'MID_SEM_REPORT'; mappedStage = 2; }
+      else if (o.report_name.includes('TERMINAL_REPORT')) { mappedType = 'CO_ATTAINMENT_COMPLETE'; mappedStage = 3; }
+      
+      return {
+        id: o.id,
+        stage: mappedStage,
+        type: mappedType,
+        file_path: o.report_file_path,
+        generated_at: o.generated_at,
+        file_exists: fileExists(o.report_file_path),
+        download_url: `/api/reports/download-file/${o.id}`
+      };
+    });
 
     res.json({
       status: 'success',
@@ -173,16 +181,21 @@ router.get('/latest/:subject_id/:output_type', async (req, res, next) => {
       throw err;
     }
 
-    const output = await IntermediateOutput.findOne({
-      where: { subject_id, output_type },
-      order: [['created_at', 'DESC']]
+    let searchName = '';
+    if (output_type === 'EARLY_SEM_REPORT') searchName = 'EARLY_SEM_REPORT';
+    else if (output_type === 'MID_SEM_REPORT') searchName = 'MID_SEM_REPORT';
+    else if (output_type === 'CO_ATTAINMENT_COMPLETE') searchName = 'TERMINAL_REPORT';
+
+    const output = await Report.findOne({
+      where: { course_id: subject_id, report_name: { [require('sequelize').Op.like]: `%${searchName}%` } },
+      order: [['generated_at', 'DESC']]
     });
 
     if (!output) {
       return res.status(404).json({ error: 'Report not found' });
     }
 
-    if (!fileExists(output.file_path)) {
+    if (!fileExists(output.report_file_path)) {
       return res.status(404).json({ error: 'Report file not found on server' });
     }
 
@@ -190,10 +203,10 @@ router.get('/latest/:subject_id/:output_type', async (req, res, next) => {
       status: 'success',
       report: {
         id: output.id,
-        type: output.output_type,
-        file_path: output.file_path,
-        generated_at: output.created_at,
-        download_url: `/api/reports/download/${output.id}`
+        type: output_type,
+        file_path: output.report_file_path,
+        generated_at: output.generated_at,
+        download_url: `/api/reports/download-file/${output.id}`
       }
     });
   } catch (error) {
@@ -210,9 +223,9 @@ router.get('/download/:id', async (req, res, next) => {
     const { id } = req.params;
     const userId = req.user.id;
 
-    const output = await IntermediateOutput.findByPk(id, {
+    const output = await Report.findByPk(id, {
       include: [{
-        association: 'subject',
+        association: 'course',
         model: Subject,
         attributes: ['id', 'user_id']
       }]
@@ -228,7 +241,7 @@ router.get('/download/:id', async (req, res, next) => {
       isAssigned = true;
     } else {
       const assignment = await FacultyCourseAssignment.findOne({
-        where: { faculty_id: userId, course_id: output.subject.id }
+        where: { faculty_id: userId, course_id: output.course.id }
       });
       isAssigned = !!assignment;
     }
@@ -238,15 +251,16 @@ router.get('/download/:id', async (req, res, next) => {
     }
 
     // Verify file exists
-    if (!fileExists(output.file_path)) {
+    if (!fileExists(output.report_file_path)) {
       return res.status(404).json({ error: 'Report file not found on server' });
     }
 
+    const output_type = output.report_name.includes('EARLY_SEM') ? 'EARLY_SEM_REPORT' : output.report_name.includes('MID_SEM') ? 'MID_SEM_REPORT' : 'CO_ATTAINMENT_COMPLETE';
     // Generate filename for download
-    const filename = `${output.output_type}_${output.subject.id}_${Date.now()}.xlsx`;
+    const filename = `${output_type}_${output.course.id}_${Date.now()}.xlsx`;
 
     // Download file
-    res.download(output.file_path, filename, (err) => {
+    res.download(output.report_file_path, filename, (err) => {
       if (err) {
         console.error('Download error:', err);
       }
@@ -304,17 +318,22 @@ router.get('/download/:subject_id/:output_type', async (req, res, next) => {
       throw err;
     }
 
-    const output = await IntermediateOutput.findOne({
-      where: { subject_id, output_type },
-      order: [['created_at', 'DESC']]
+    let searchName = '';
+    if (output_type === 'EARLY_SEM_REPORT') searchName = 'EARLY_SEM_REPORT';
+    else if (output_type === 'MID_SEM_REPORT') searchName = 'MID_SEM_REPORT';
+    else if (output_type === 'CO_ATTAINMENT_COMPLETE') searchName = 'TERMINAL_REPORT';
+
+    const output = await Report.findOne({
+      where: { course_id: subject_id, report_name: { [require('sequelize').Op.like]: `%${searchName}%` } },
+      order: [['generated_at', 'DESC']]
     });
 
-    if (!output || !fileExists(output.file_path)) {
+    if (!output || !fileExists(output.report_file_path)) {
       return res.status(404).json({ error: 'Report not found' });
     }
 
     const filename = `${output_type}_${subject_id}_${Date.now()}.xlsx`;
-    res.download(output.file_path, filename);
+    res.download(output.report_file_path, filename);
   } catch (error) {
     next(error);
   }
@@ -338,23 +357,20 @@ router.post('/clear-process/:subject_id', async (req, res, next) => {
       throw err;
     }
 
-    const outputs = await IntermediateOutput.findAll({
-      where: { subject_id }
+    // IntermediateOutputs no longer exist. Just clean up Reports.
+    const outputs = await Report.findAll({
+      where: { course_id: subject_id }
     });
 
     for (const output of outputs) {
-      if (output.file_path && fileExists(output.file_path)) {
+      if (output.report_file_path && fileExists(output.report_file_path)) {
         try {
-          fs.unlinkSync(output.file_path);
+          fs.unlinkSync(output.report_file_path);
         } catch (error) {
           // Ignore missing/delete failures and continue cleaning metadata.
         }
       }
     }
-
-    await IntermediateOutput.destroy({
-      where: { subject_id }
-    });
 
     // Destroy Report table records too
     await Report.destroy({
