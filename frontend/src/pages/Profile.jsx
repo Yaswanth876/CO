@@ -1,11 +1,23 @@
-import { Building2, IdCard, Mail, ShieldCheck, UserRound } from "lucide-react";
+import { Building2, IdCard, Mail, ShieldCheck, UserRound, ArrowRight } from "lucide-react";
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
-import { pageVariants, containerVariants, cardVariants, sectionVariants } from "../lib/animations";
 import { getProfile, updateFacultyProfile } from "../lib/api";
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 }
+  }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 15 },
+  visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
+};
 
 export default function Profile({ user }) {
   const [facultyProfile, setFacultyProfile] = useState({
@@ -19,40 +31,34 @@ export default function Profile({ user }) {
   const [editName, setEditName] = useState(user?.full_name || "Staff User");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (error) {
-      const timer = setTimeout(() => setError(""), 5000);
+      const timer = setTimeout(() => setError(""), 4000);
       return () => clearTimeout(timer);
     }
   }, [error]);
 
   useEffect(() => {
     if (success) {
-      const timer = setTimeout(() => setSuccess(""), 5000);
+      const timer = setTimeout(() => setSuccess(""), 4000);
       return () => clearTimeout(timer);
     }
   }, [success]);
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     async function loadProfile() {
-      if (!user?.email) {
-        return;
-      }
+      if (!user?.email) return;
 
       try {
         const data = await getProfile(user.email);
         setFacultyProfile(data);
         setEditName(data.name);
       } catch {
-        setFacultyProfile((prev) => ({
-          ...prev,
-          email: user.email,
-        }));
+        setFacultyProfile((prev) => ({ ...prev, email: user.email }));
       }
     }
-
     loadProfile();
   }, [user?.email]);
 
@@ -66,7 +72,7 @@ export default function Profile({ user }) {
       setFacultyProfile(prev => ({ ...prev, name: data.user.full_name }));
       localStorage.setItem("coas-user", JSON.stringify(data.user));
       localStorage.setItem("userName", data.user.full_name || "");
-      setSuccess("Profile name updated successfully.");
+      setSuccess("Profile updated successfully");
     } catch (err) {
       setError(err.message || "Failed to update profile.");
     } finally {
@@ -75,103 +81,141 @@ export default function Profile({ user }) {
   };
 
   const fields = [
-    { label: "Email", icon: Mail, value: facultyProfile.email, span: false },
-    { label: "Department", icon: Building2, value: facultyProfile.department, span: false },
-    { label: "Role", icon: ShieldCheck, value: facultyProfile.role, span: false },
-    { label: "Employee ID", icon: IdCard, value: facultyProfile.employeeId, span: false },
+    { label: "Email", icon: Mail, value: facultyProfile.email },
+    { label: "Department", icon: Building2, value: facultyProfile.department },
+    { label: "Role", icon: ShieldCheck, value: facultyProfile.role },
+    { label: "Employee ID", icon: IdCard, value: facultyProfile.employeeId },
   ];
 
   return (
-    <motion.div
-      className="space-y-6 p-4 md:p-6"
-      variants={pageVariants}
-      initial="hidden"
-      animate="visible"
-      exit="exit"
-    >
-      <motion.div variants={sectionVariants}>
-        <Card className="border-red-100/80 shadow-[0_18px_45px_-35px_rgba(127,29,29,0.45)]">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-2xl text-red-950">Profile</CardTitle>
-            <p className="mt-2 max-w-2xl text-sm text-slate-600">
-              View your faculty account details and update your display name.
-            </p>
-          </CardHeader>
-        </Card>
-      </motion.div>
+    <div className="p-4 md:p-8 max-w-3xl mx-auto space-y-6">
+      <AnimatePresence mode="popLayout">
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-red-50 text-red-700 px-4 py-3 rounded-lg flex justify-between items-center border border-red-100 shadow-sm"
+          >
+            <span className="text-sm font-medium">{error}</span>
+            <button onClick={() => setError("")} className="hover:bg-red-100 p-1.5 rounded-full transition-colors flex items-center justify-center">
+              <span className="text-lg leading-none">&times;</span>
+            </button>
+          </motion.div>
+        )}
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex justify-between max-w-4xl mx-auto">
-          <span>{error}</span>
-          <button onClick={() => setError("")} className="font-bold">&times;</button>
-        </div>
-      )}
+        {success && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-emerald-50 text-emerald-700 px-4 py-3 rounded-lg flex justify-between items-center border border-emerald-100 shadow-sm"
+          >
+            <span className="text-sm font-medium">{success}</span>
+            <button onClick={() => setSuccess("")} className="hover:bg-emerald-100 p-1.5 rounded-full transition-colors flex items-center justify-center">
+              <span className="text-lg leading-none">&times;</span>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {success && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg flex justify-between max-w-4xl mx-auto">
-          <span>{success}</span>
-          <button onClick={() => setSuccess("")} className="font-bold">&times;</button>
-        </div>
-      )}
-
-      <motion.div variants={cardVariants}>
-        <Card className="mx-auto w-full max-w-4xl border-red-100/80 shadow-[0_18px_35px_-30px_rgba(30,41,59,0.35)]">
-          <CardHeader className="pb-5">
-            <div className="flex items-center gap-4">
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <Card className="border-slate-100 shadow-sm overflow-hidden bg-white/70 backdrop-blur-md">
+          <CardHeader className="border-b border-slate-100/60 bg-slate-50/50 pb-8 pt-8">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
               <motion.div
-                className="grid h-14 w-14 place-items-center rounded-full bg-red-100 text-red-800 shadow-sm"
-                whileHover={{ scale: 1.08, rotate: 3 }}
-                transition={{ type: "spring", stiffness: 300, damping: 18 }}
+                className="relative grid h-24 w-24 shrink-0 place-items-center rounded-2xl bg-red-50 text-red-700 shadow-sm border border-red-100"
+                whileHover={{ scale: 1.05, rotate: -3 }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 400, damping: 15 }}
               >
-                <UserRound size={26} />
+                <UserRound size={36} className="opacity-90" />
               </motion.div>
-              <CardTitle className="flex items-center gap-2 text-xl text-red-950">
-                Faculty Information
-              </CardTitle>
+              <div className="text-center sm:text-left space-y-1.5 mt-2 sm:mt-1">
+                <CardTitle className="text-2xl text-slate-900 font-bold tracking-tight">
+                  {facultyProfile.name}
+                </CardTitle>
+                <p className="text-sm text-slate-500 font-medium">
+                  {facultyProfile.role} • {facultyProfile.department}
+                </p>
+                <div className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-md bg-green-50 text-green-700 text-xs font-semibold border border-green-100 shadow-sm">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                  Active Account
+                </div>
+              </div>
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-6">
-            <form onSubmit={handleUpdateProfile} className="space-y-4 rounded-lg border border-slate-200 bg-slate-50/70 p-4">
-              <h3 className="text-sm font-semibold uppercase tracking-[0.15em] text-slate-500">Edit Display Name</h3>
-              <div className="flex gap-4">
+          <CardContent className="p-6 sm:p-8 space-y-8">
+            <motion.form variants={itemVariants} onSubmit={handleUpdateProfile} className="space-y-3">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 ml-1">
+                Display Name
+              </label>
+              <div className="flex gap-3">
                 <Input
                   required
                   value={editName}
                   onChange={e => setEditName(e.target.value)}
-                  className="bg-white"
+                  className="bg-white max-w-md transition-all focus-visible:ring-red-500/20 shadow-sm h-11"
                 />
-                <Button type="submit" disabled={saving}>
-                  {saving ? "Saving..." : "Save Name"}
+                <Button
+                  type="submit"
+                  disabled={saving || editName === facultyProfile.name}
+                  className="bg-slate-900 hover:bg-slate-800 text-white min-w-[110px] h-11 shadow-sm transition-all group"
+                >
+                  <AnimatePresence mode="wait">
+                    {saving ? (
+                      <motion.span
+                        key="saving"
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="text-sm"
+                      >
+                        Saving...
+                      </motion.span>
+                    ) : (
+                      <motion.span
+                        key="save"
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        Save
+                        <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
                 </Button>
               </div>
-            </form>
+            </motion.form>
 
-            <motion.dl
-              className="grid gap-4 sm:grid-cols-2"
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-            >
+            <motion.div variants={itemVariants} className="grid sm:grid-cols-2 gap-4">
               {fields.map((field) => (
                 <motion.div
                   key={field.label}
-                  variants={cardVariants}
-                  className={`rounded-lg border border-slate-200 bg-slate-50/70 p-4 transition-colors hover:border-red-100 hover:bg-red-50/30 ${
-                    field.span ? "sm:col-span-2" : ""
-                  }`}
+                  whileHover={{ y: -2 }}
+                  className="rounded-xl border border-slate-100 bg-white p-4 transition-all hover:bg-red-50/30 hover:border-red-100 hover:shadow-sm group cursor-default"
                 >
-                  <dt className="flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">
-                    {field.icon && <field.icon size={13} />}
+                  <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400 group-hover:text-red-500 transition-colors">
+                    <field.icon size={14} />
                     {field.label}
                   </dt>
-                  <dd className="mt-2 text-sm font-medium text-slate-900">{field.value}</dd>
+                  <dd className="mt-1.5 text-sm font-medium text-slate-800 truncate">
+                    {field.value || "—"}
+                  </dd>
                 </motion.div>
               ))}
-            </motion.dl>
+            </motion.div>
           </CardContent>
         </Card>
       </motion.div>
-    </motion.div>
+    </div>
   );
 }
+
