@@ -31,7 +31,7 @@ CREATE TABLE subjects (
 CREATE TABLE files (
   id SERIAL PRIMARY KEY,
   subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
-  file_type VARCHAR(50) NOT NULL,  -- 'CAT1_QP', 'CAT1_MARKS', 'CAT2_QP', 'CAT2_MARKS', 'ASS1', 'ASS2', 'TERMINAL'
+  file_type VARCHAR(50) NOT NULL,  -- 'CAT1_MARKS', 'CAT2_MARKS', 'ASS1', 'ASS2', 'TERMINAL'
   original_filename VARCHAR(255) NOT NULL,
   stored_filename VARCHAR(255) NOT NULL,  -- timestamp_subjectCode_type_filename
   file_path VARCHAR(500) NOT NULL,  -- Absolute path on server
@@ -43,17 +43,7 @@ CREATE TABLE files (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Intermediate outputs table (tracks processed files)
-CREATE TABLE intermediate_outputs (
-  id SERIAL PRIMARY KEY,
-  subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
-  stage_number INTEGER NOT NULL,  -- 1, 2, 3, or 4
-  output_type VARCHAR(50) NOT NULL,  -- 'QP_FINAL', 'CAT1_FINAL', 'CAT2_FINAL', 'CO_ATTAINMENT_FINAL', 'CO_ATTAINMENT_COMPLETE'
-  file_path VARCHAR(500) NOT NULL,
-  generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  is_latest BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+
 
 -- Configuration table (stores EP, ELA, Constraint per subject)
 CREATE TABLE configurations (
@@ -93,7 +83,7 @@ CREATE INDEX idx_subjects_status ON subjects(status);
 CREATE INDEX idx_files_subject_id ON files(subject_id);
 CREATE INDEX idx_files_file_type ON files(file_type);
 CREATE INDEX idx_files_status ON files(processing_status);
-CREATE INDEX idx_intermediate_subject ON intermediate_outputs(subject_id);
+
 CREATE INDEX idx_logs_subject ON processing_logs(subject_id);
 
 -- Insert default admin user (password: admin123 - hash this in production!)

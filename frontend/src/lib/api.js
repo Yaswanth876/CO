@@ -136,28 +136,12 @@ export function getSubjectStatus(subjectId) {
 }
 
 function mapUploadRoute(fileType) {
-  if (fileType === "CAT1_QP") {
-    return "/api/phase1/upload-qp";
-  }
-
-  if (fileType === "CAT1_MARKS") {
-    return "/api/phase1/upload-marks";
-  }
-
-  if (fileType === "ASS1") {
-    return "/api/phase1/upload-assignment";
-  }
-
-  if (fileType === "TERMINAL") {
-    return "/api/phase3/upload-terminal";
-  }
-
-  if (fileType === "TERMINAL_QP") {
-    return "/api/phase3/upload-terminal-qp";
-  }
-
-
-  return "/api/phase2/upload";
+  if (fileType === "CAT1_MARKS") return "/api/uploads/cat1";
+  if (fileType === "CAT2_MARKS") return "/api/uploads/cat2";
+  if (fileType === "ASS1") return "/api/uploads/ass1";
+  if (fileType === "ASS2") return "/api/uploads/ass2";
+  if (fileType === "TERMINAL") return "/api/uploads/terminal";
+  return "/api/uploads/unknown";
 }
 
 export async function uploadWorkspaceFile(subjectId, subjectCode, fileType, file) {
@@ -165,7 +149,7 @@ export async function uploadWorkspaceFile(subjectId, subjectCode, fileType, file
   const formData = new FormData();
   formData.append("subject_id", String(subjectId));
   formData.append("subject_code", subjectCode);
-    if (!["CAT1_QP", "CAT1_MARKS", "ASS1", "TERMINAL", "TERMINAL_QP"].includes(fileType)) {
+    if (!["CAT1_MARKS", "CAT2_MARKS", "ASS1", "ASS2", "TERMINAL"].includes(fileType)) {
     formData.append("file_type", fileType);
   }
   formData.append("file", file);
@@ -221,7 +205,7 @@ export function getConfiguration(subjectId) {
 }
 
 export function processPhase1(subjectId) {
-  return request("/api/phase1/process", {
+  return request("/api/processing/early-sem", {
     method: "POST",
     body: JSON.stringify({ subject_id: subjectId }),
   });
@@ -233,14 +217,14 @@ export function processPhase2(subjectId, templatePath) {
     body.template_path = templatePath;
   }
 
-  return request("/api/phase2/process", {
+  return request("/api/processing/mid-sem", {
     method: "POST",
     body: JSON.stringify(body),
   });
 }
 
 export function processPhase3(subjectId) {
-  return request("/api/phase3/finalize", {
+  return request("/api/processing/terminal", {
     method: "POST",
     body: JSON.stringify({ subject_id: subjectId }),
   });

@@ -22,7 +22,7 @@ module.exports = (sequelize, Sequelize) => {
     file_type: {
       type: DataTypes.STRING(50),
       allowNull: false
-      // 'CAT1_QP', 'CAT1_MARKS', 'CAT2_QP', 'CAT2_MARKS', 'ASS1', 'ASS2', 'TERMINAL'
+      // 'CAT1_MARKS', 'CAT2_MARKS', 'ASS1', 'ASS2', 'TERMINAL'
     },
     original_filename: {
       type: DataTypes.STRING

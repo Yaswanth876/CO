@@ -153,33 +153,6 @@ function runPythonStage(stageName, args, timeout = 300000) {
 }
 
 /**
- * Run Stage 1: Question Paper Parsing
- */
-async function runStage1(docxPath, outputPath) {
-  return runPythonStage('stage1_qp.py', {
-    docx_path: docxPath,
-    output_path: outputPath
-  });
-}
-
-/**
- * Run Stage 2: CAMU Marks Parser → QP Excel Builder (New Format)
- *
- * The new CAMU format embeds CO tags (row 2) and max marks (row 3) directly
- * in the marks Excel, so a separate question-paper (DOCX / QP Excel) is no
- * longer required.  Stage 2 now builds the Stage-3-compatible output itself.
- *
- * @param {string} marksPath   - Path to the CAMU marks Excel (.xlsx)
- * @param {string} outputPath  - Path for the generated output Excel
- */
-async function runStage2(marksPath, outputPath) {
-  return runPythonStage('stage2_marks.py', {
-    student_db_path: marksPath,
-    output_path: outputPath
-  });
-}
-
-/**
  * Run Stage 3: Master Template Consolidation
  */
 async function runStage3(templatePath, cat1Path, cat2Path, ass1Path, ass2Path, outputPath, phase) {
@@ -237,8 +210,6 @@ async function runStage4(coAttainmentPath, terminalPath, outputPath, ep, constra
 
 module.exports = {
   runPythonStage,
-  runStage1,
-  runStage2,
   runStage3,
   runStage4
 };

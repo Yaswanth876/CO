@@ -18,9 +18,8 @@ const { ensureDevFacultySeed } = require('./utils/devSeed');
 // Route imports
 const authRoutes = require('./routes/auth');
 const subjectRoutes = require('./routes/subjects');
-const phase1Routes = require('./routes/phase1');
-const phase2Routes = require('./routes/phase2');
-const phase3Routes = require('./routes/phase3');
+const uploadsRoutes = require('./routes/uploads');
+const processingRoutes = require('./routes/processing');
 const reportRoutes = require('./routes/reports');
 const configRoutes = require('./routes/configuration');
 const adminRoutes = require('./routes/admin');
@@ -118,9 +117,8 @@ app.get('/api/health', (req, res) => {
 // ============================================================
 
 app.use('/api/subjects', authMiddleware, subjectRoutes);
-app.use('/api/phase1', authMiddleware, phase1Routes);
-app.use('/api/phase2', authMiddleware, phase2Routes);
-app.use('/api/phase3', authMiddleware, phase3Routes);
+app.use('/api/uploads', authMiddleware, uploadsRoutes);
+app.use('/api/processing', authMiddleware, processingRoutes);
 app.use('/api/reports', authMiddleware, reportRoutes);
 app.use('/api/configuration', authMiddleware, configRoutes);
 app.use('/api/admin', adminRoutes);
