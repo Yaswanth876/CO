@@ -51,17 +51,11 @@ const DEV_SUBJECTS = {
 };
 
 async function ensureDevFacultySeed() {
-  if ((process.env.NODE_ENV || 'development') === 'production') {
-    return;
-  }
-
-  const passwordHash = await bcrypt.hash(DEV_PASSWORD, 10);
-
-  // Seed default Admin
+  // Always seed default Admin so the system is usable in production
   const adminEmail = 'admin@tce.edu';
   let admin = await User.findOne({ where: { email: adminEmail } });
   if (!admin) {
-    await User.create({
+    admin = await User.create({
       email: adminEmail,
       password_hash: await bcrypt.hash('admin123', 10),
       full_name: 'System Admin',
@@ -69,6 +63,13 @@ async function ensureDevFacultySeed() {
       is_active: true
     });
   }
+
+  // Skip dummy faculty/subject seeding in production
+  if ((process.env.NODE_ENV || 'development') === 'production') {
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(DEV_PASSWORD, 10);
 
   for (const email of DEV_ALLOWED_EMAILS) {
     let user = await User.findOne({ where: { email } });
