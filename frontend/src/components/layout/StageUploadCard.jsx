@@ -1,5 +1,5 @@
 import { CheckCircle2, CloudUpload, FileSpreadsheet, Loader2, Sparkles } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -9,7 +9,7 @@ import { cardVariants } from "../../lib/animations";
 /** Map file keys → icon + accent colour */
 function getFileStyle(key) {
   if (key.includes("MARKS") || key.includes("ASS") || key === "TERMINAL") {
-    return { Icon: FileSpreadsheet, accent: "text-emerald-600", bg: "bg-emerald-50" };
+    return { Icon: FileSpreadsheet, accent: "text-red-700", bg: "bg-red-50" };
   }
   return { Icon: CloudUpload, accent: "text-red-600", bg: "bg-red-50" };
 }
@@ -62,6 +62,16 @@ export default function StageUploadCard({
     }
   };
 
+  useEffect(() => {
+    if (uploadMessage || uploadError) {
+      const timer = setTimeout(() => {
+        setUploadMessage("");
+        setUploadError("");
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [uploadMessage, uploadError]);
+
   const handleDrop = (key, e) => {
     e.preventDefault();
     setDragOverKey("");
@@ -84,7 +94,7 @@ export default function StageUploadCard({
               <AnimatePresence>
                 {isCompleted && (
                   <motion.span
-                    className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"
+                    className="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-200 px-2 py-0.5 text-[11px] font-semibold text-red-700"
                     initial={{ opacity: 0, scale: 0.7, x: -4 }}
                     animate={{ opacity: 1, scale: 1, x: 0 }}
                     exit={{ opacity: 0, scale: 0.7 }}
@@ -104,7 +114,7 @@ export default function StageUploadCard({
               </span>
               <div className="w-20 h-1.5 rounded-full bg-slate-100 overflow-hidden">
                 <motion.div
-                  className={`h-full rounded-full ${isCompleted ? "bg-emerald-500" : "bg-red-600"}`}
+                  className={`h-full rounded-full ${isCompleted ? "bg-red-700" : "bg-red-500"}`}
                   initial={{ width: 0 }}
                   animate={{ width: `${progressPct}%` }}
                   transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
@@ -129,7 +139,7 @@ export default function StageUploadCard({
                   key={item.key}
                   className={`upload-row relative flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer group
                     ${isDone
-                      ? "border-emerald-200 bg-emerald-50/60"
+                      ? "border-red-200 bg-red-50/60"
                       : isDragOver
                         ? "border-red-400 bg-red-50/60 scale-[1.01]"
                         : "border-slate-200 bg-white hover:border-red-200 hover:bg-red-50/30"
@@ -147,18 +157,18 @@ export default function StageUploadCard({
                   aria-label={`Upload ${item.label}`}
                 >
                   {/* Icon badge */}
-                  <span className={`flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg ${isDone ? "bg-emerald-100" : bg} transition-colors duration-200`}>
+                  <span className={`flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg ${isDone ? "bg-red-100" : bg} transition-colors duration-200`}>
                     {isUploading
                       ? <Loader2 size={16} className="spinner text-blue-500" />
                       : isDone
-                        ? <CheckCircle2 size={16} className="text-emerald-600" />
+                        ? <CheckCircle2 size={16} className="text-red-700" />
                         : <Icon size={16} className={accent} />
                     }
                   </span>
 
                   {/* Label + sublabel */}
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-semibold leading-tight truncate ${isDone ? "text-emerald-800" : "text-slate-700"}`}>
+                    <p className={`text-sm font-semibold leading-tight truncate ${isDone ? "text-red-900" : "text-slate-700"}`}>
                       {item.label}
                     </p>
                     <p className="text-[11px] font-medium text-slate-400 mt-0.5">
@@ -188,7 +198,7 @@ export default function StageUploadCard({
                     ) : isDone ? (
                       <motion.span
                         key="done"
-                        className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-200 px-2.5 py-1 text-[11px] font-semibold text-emerald-700"
+                        className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-red-100 border border-red-200 px-2.5 py-1 text-[11px] font-semibold text-red-700"
                         initial={{ opacity: 0, scale: 0.6 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.6 }}
@@ -253,7 +263,7 @@ export default function StageUploadCard({
             {uploadMessage && (
               <motion.p
                 key="msg"
-                className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2"
+                className="text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
