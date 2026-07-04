@@ -1,41 +1,33 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Building2,
-  LockKeyhole,
-  LogOut,
-  Mail,
-  ShieldCheck,
-  UserRound,
-  CheckCircle2,
-  AlertCircle,
-} from "lucide-react";
+import { LockKeyhole, LogOut, CheckCircle2, AlertCircle, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import {
-  pageVariants,
-  containerVariants,
-  cardVariants,
-  sectionVariants,
-} from "../lib/animations";
 import { getProfile, updatePassword } from "../lib/api";
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 15 },
+  visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } },
+};
 
 export default function Settings({ user }) {
   const navigate = useNavigate();
-  const [facultyProfile, setFacultyProfile] = useState({
-    name: "Staff User",
-    email: user?.email || "",
-    department: "Computer Science and Engineering",
-    role: user?.role || "Staff",
-  });
+  const [userEmail, setUserEmail] = useState(user?.email || "");
+
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
   const [messageType, setMessageType] = useState("idle");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (passwordMessage) {
@@ -45,31 +37,19 @@ export default function Settings({ user }) {
   }, [passwordMessage]);
 
   useEffect(() => {
-    async function loadProfile() {
-      if (!user?.email) {
-        return;
-      }
-
+    async function fetchEmail() {
+      if (!user?.email) return;
       try {
         const profile = await getProfile(user.email);
-        setFacultyProfile({
-          name: profile.name,
-          email: profile.email,
-          department: profile.department,
-          role: profile.role,
-        });
+        setUserEmail(profile.email);
       } catch {
-        setFacultyProfile((prev) => ({
-          ...prev,
-          email: user.email,
-        }));
+        setUserEmail(user.email);
       }
     }
-
-    loadProfile();
+    fetchEmail();
   }, [user?.email]);
 
-  const handlePasswordUpdate = (event) => {
+  const handlePasswordUpdate = async (event) => {
     event.preventDefault();
 
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -90,198 +70,162 @@ export default function Settings({ user }) {
       return;
     }
 
-    updatePassword({
-      email: facultyProfile.email,
-      currentPassword,
-      newPassword,
-    })
-      .then((data) => {
-        setMessageType("success");
-        setPasswordMessage(data.message || "Password updated successfully.");
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-      })
-      .catch((error) => {
-        setMessageType("error");
-        setPasswordMessage(error.message || "Password update failed.");
+    setSaving(true);
+    try {
+      const data = await updatePassword({
+        email: userEmail,
+        currentPassword,
+        newPassword,
       });
+      setMessageType("success");
+      setPasswordMessage(data.message || "Password updated successfully.");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error) {
+      setMessageType("error");
+      setPasswordMessage(error.message || "Password update failed.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <motion.div
-      className="space-y-6 p-4 md:p-6"
-      variants={pageVariants}
-      initial="hidden"
-      animate="visible"
-      exit="exit"
-    >
-      <motion.div variants={sectionVariants}>
-        <Card className="border-red-100/80 shadow-[0_18px_45px_-35px_rgba(127,29,29,0.45)]">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-2xl text-red-950">Settings</CardTitle>
-            <p className="mt-2 max-w-2xl text-sm text-slate-600">
-              Manage your profile details, account security, and session actions within the CO
-              Attainment dashboard.
-            </p>
-          </CardHeader>
-        </Card>
-      </motion.div>
-
-      <motion.div
-        className="mx-auto w-full max-w-4xl space-y-5"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        <motion.div variants={cardVariants}>
-          <Card className="border-red-100/80 shadow-[0_18px_35px_-30px_rgba(30,41,59,0.35)]">
-            <CardHeader className="pb-5">
-              <CardTitle className="flex items-center gap-2 text-xl text-red-950">
-                <UserRound size={20} className="text-red-900" />
-                Profile Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <dl className="grid gap-4 sm:grid-cols-2">
-                {[
-                  { label: "Name", icon: null, value: facultyProfile.name },
-                  { label: "Email", icon: Mail, value: facultyProfile.email },
-                  { label: "Department", icon: Building2, value: facultyProfile.department },
-                  { label: "Role", icon: ShieldCheck, value: facultyProfile.role },
-                ].map((field) => (
-                  <div
-                    key={field.label}
-                    className="rounded-lg border border-slate-200 bg-slate-50/70 p-4 transition-colors hover:border-red-100 hover:bg-red-50/30"
-                  >
-                    <dt className="flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">
-                      {field.icon && <field.icon size={13} />}
-                      {field.label}
-                    </dt>
-                    <dd className="mt-2 text-sm font-medium text-slate-900">{field.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </CardContent>
-          </Card>
+    <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-6">
+      <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-6">
+        
+        {/* Header */}
+        <motion.div variants={itemVariants} className="mb-8">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Settings</h1>
+          <p className="text-sm text-slate-500 mt-1">Manage your account security and active sessions.</p>
         </motion.div>
 
-        <motion.div variants={cardVariants}>
-          <Card className="border-red-100/80 shadow-[0_18px_35px_-30px_rgba(30,41,59,0.35)]">
-            <CardHeader className="pb-5">
-              <CardTitle className="flex items-center gap-2 text-xl text-red-950">
-                <LockKeyhole size={20} className="text-red-900" />
+        {/* Change Password Card */}
+        <motion.div variants={itemVariants}>
+          <Card className="border-slate-100 shadow-sm bg-white/70 backdrop-blur-md overflow-hidden">
+            <CardHeader className="border-b border-slate-100/60 bg-slate-50/50 pb-6 pt-6">
+              <CardTitle className="flex items-center gap-2 text-lg text-slate-900 font-semibold">
+                <div className="p-2 rounded-lg bg-red-950/10 text-red-950 border border-red-950/20">
+                  <LockKeyhole size={18} />
+                </div>
                 Change Password
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <form className="space-y-4" onSubmit={handlePasswordUpdate}>
+            <CardContent className="p-6">
+              <form className="space-y-5" onSubmit={handlePasswordUpdate}>
                 <div className="space-y-2">
-                  <Label htmlFor="currentPassword">Current Password</Label>
+                  <Label htmlFor="currentPassword" className="text-xs font-semibold uppercase tracking-wider text-slate-500">Current Password</Label>
                   <Input
                     id="currentPassword"
                     type="password"
                     value={currentPassword}
-                    onChange={(event) => setCurrentPassword(event.target.value)}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
                     placeholder="Enter current password"
-                    className="input-focus-motion"
+                    className="bg-white transition-all focus-visible:ring-red-500/20 shadow-sm h-10"
                   />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-5 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="newPassword">New Password</Label>
+                    <Label htmlFor="newPassword" className="text-xs font-semibold uppercase tracking-wider text-slate-500">New Password</Label>
                     <Input
                       id="newPassword"
                       type="password"
                       value={newPassword}
-                      onChange={(event) => setNewPassword(event.target.value)}
+                      onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="Enter new password"
-                      className="input-focus-motion"
+                      className="bg-white transition-all focus-visible:ring-red-500/20 shadow-sm h-10"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                    <Label htmlFor="confirmPassword" className="text-xs font-semibold uppercase tracking-wider text-slate-500">Confirm Password</Label>
                     <Input
                       id="confirmPassword"
                       type="password"
                       value={confirmPassword}
-                      onChange={(event) => setConfirmPassword(event.target.value)}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Re-enter new password"
-                      className="input-focus-motion"
+                      className="bg-white transition-all focus-visible:ring-red-500/20 shadow-sm h-10"
                     />
                   </div>
                 </div>
 
-                <AnimatePresence mode="wait">
+                <AnimatePresence mode="popLayout">
                   {passwordMessage && (
-                    <motion.p
+                    <motion.div
                       key={passwordMessage}
-                      className={`flex items-center gap-2 text-sm ${
-                        messageType === "success" ? "text-emerald-700" : "text-red-700"
+                      initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium border shadow-sm ${
+                        messageType === "success" 
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-100" 
+                          : "bg-red-50 text-red-700 border-red-100"
                       }`}
-                      initial={{ opacity: 0, y: -6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 6 }}
-                      transition={{ duration: 0.25 }}
                     >
                       {messageType === "success" ? (
-                        <CheckCircle2 size={15} className="text-emerald-600" />
+                        <CheckCircle2 size={16} className="text-emerald-600" />
                       ) : (
-                        <AlertCircle size={15} className="text-red-600" />
+                        <AlertCircle size={16} className="text-red-600" />
                       )}
                       {passwordMessage}
-                    </motion.p>
+                    </motion.div>
                   )}
                 </AnimatePresence>
 
-                <motion.div whileTap={{ scale: 0.98 }}>
-                  <Button type="submit" className="btn-press min-w-[170px]">
-                    Update Password
+                <div className="pt-2">
+                  <Button 
+                    type="submit" 
+                    disabled={saving}
+                    className="btn-press shadow-sm group h-10 px-6 w-full sm:w-auto"
+                  >
+                    <AnimatePresence mode="wait">
+                      {saving ? (
+                        <motion.span key="saving" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                          Updating...
+                        </motion.span>
+                      ) : (
+                        <motion.span key="update" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
+                          Update Password
+                          <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
                   </Button>
-                </motion.div>
+                </div>
               </form>
             </CardContent>
           </Card>
         </motion.div>
 
-        <motion.div variants={cardVariants}>
-          <Card className="border-red-100/80 shadow-[0_18px_35px_-30px_rgba(30,41,59,0.35)]">
-            <CardHeader className="pb-5">
-              <CardTitle className="flex items-center gap-2 text-xl text-red-950">
-                <LogOut size={20} className="text-red-900" />
-                Account Actions
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-slate-600">
-                End your current session and return to the login page.
-              </p>
-              <motion.div whileTap={{ scale: 0.97 }}>
+        {/* Account Actions Card */}
+        <motion.div variants={itemVariants}>
+          <Card className="border-slate-100 shadow-sm bg-white/70 backdrop-blur-md overflow-hidden">
+            <CardContent className="p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                  <LogOut size={16} className="text-red-950" />
+                  Sign Out
+                </h3>
+                <p className="text-sm text-slate-500">
+                  End your current session securely.
+                </p>
+              </div>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full sm:w-auto">
                 <Button
-                  variant="ghost"
-                  className="btn-press border border-red-200 hover:bg-red-50"
+                  variant="outline"
+                  className="btn-press w-full sm:w-auto border-red-950/20 text-red-950 hover:bg-red-950/10 hover:text-red-950 hover:border-red-950/30 bg-white shadow-sm h-10"
                   onClick={() => navigate("/login")}
                 >
-                  Logout
+                  Log out
                 </Button>
               </motion.div>
             </CardContent>
           </Card>
         </motion.div>
-      </motion.div>
 
-      <motion.div variants={sectionVariants} className="mx-auto w-full max-w-4xl">
-        <Card className="border-red-100/80 bg-red-50/50">
-          <CardContent className="pt-6">
-            <p className="text-xs font-medium text-slate-600">
-              Tip: Use a strong password containing uppercase letters, lowercase letters, numbers,
-              and special characters.
-            </p>
-          </CardContent>
-        </Card>
       </motion.div>
-    </motion.div>
+    </div>
   );
 }

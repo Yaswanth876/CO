@@ -128,7 +128,7 @@ export default function Profile({ user }) {
           <CardHeader className="border-b border-slate-100/60 bg-slate-50/50 pb-8 pt-8">
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
               <motion.div
-                className="relative grid h-24 w-24 shrink-0 place-items-center rounded-2xl bg-red-50 text-red-700 shadow-sm border border-red-100"
+                className="relative grid h-24 w-24 shrink-0 place-items-center rounded-2xl bg-red-950/10 text-red-950 shadow-sm border border-red-950/20"
                 whileHover={{ scale: 1.05, rotate: -3 }}
                 whileTap={{ scale: 0.95 }}
                 transition={{ type: "spring", stiffness: 400, damping: 15 }}
@@ -160,12 +160,12 @@ export default function Profile({ user }) {
                   required
                   value={editName}
                   onChange={e => setEditName(e.target.value)}
-                  className="bg-white max-w-md transition-all focus-visible:ring-red-500/20 shadow-sm h-11"
+                  className="bg-white max-w-md transition-all focus-visible:ring-red-950/20 shadow-sm h-11"
                 />
                 <Button
                   type="submit"
                   disabled={saving || editName === facultyProfile.name}
-                  className="bg-slate-900 hover:bg-slate-800 text-white min-w-[110px] h-11 shadow-sm transition-all group"
+                  className="btn-press min-w-[110px] h-11 shadow-sm group"
                 >
                   <AnimatePresence mode="wait">
                     {saving ? (
@@ -200,9 +200,9 @@ export default function Profile({ user }) {
                 <motion.div
                   key={field.label}
                   whileHover={{ y: -2 }}
-                  className="rounded-xl border border-slate-100 bg-white p-4 transition-all hover:bg-red-50/30 hover:border-red-100 hover:shadow-sm group cursor-default"
+                  className="rounded-xl border border-slate-100 bg-white p-4 transition-all hover:bg-red-950/5 hover:border-red-950/20 hover:shadow-sm group cursor-default"
                 >
-                  <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400 group-hover:text-red-500 transition-colors">
+                  <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400 group-hover:text-red-950 transition-colors">
                     <field.icon size={14} />
                     {field.label}
                   </dt>

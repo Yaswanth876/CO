@@ -46,7 +46,7 @@ function SidebarContent({ user, collapsed = false, onClose, onToggleCollapse, de
         onClick={onClose}
         title={collapsed ? label : undefined}
         className={cn(
-          "sidebar-link group relative flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
+          "sidebar-link group relative flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 outline-none",
           collapsed ? "justify-center" : "pl-8 gap-3",
           active
             ? "bg-red-100 text-red-900"

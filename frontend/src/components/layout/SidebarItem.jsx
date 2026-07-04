@@ -28,7 +28,7 @@ export function SidebarItem({ to, icon: Icon, label, collapsed = false, onNaviga
       onClick={onNavigate}
       title={collapsed ? label : undefined}
       className={cn(
-        "sidebar-link group relative flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium",
+        "sidebar-link group relative flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium outline-none",
         collapsed ? "justify-center" : "gap-3",
         active
           ? "bg-red-100 text-red-900"
