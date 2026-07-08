@@ -134,6 +134,50 @@ def generate_feedback_sheet(wb, sheet2, student_rows, ep, phase, internal_start_
             feedback_ws.cell(row=output_row, column=3).value = sheet2.cell(row=row, column=3).value
             output_row += 1
 
+def write_summary_block(sheet, summary_row, label_col, start_col, co_count, last_student, ep, ela_values):
+    sheet.cell(row=summary_row, column=label_col).value = "Total"
+    for i in range(co_count):
+        col = get_column_letter(start_col + i)
+        sheet.cell(row=summary_row, column=start_col + i).value = (
+            f"=COUNT({col}6:{col}{last_student})"
+        )
+
+    sheet.cell(row=summary_row + 1, column=label_col).value = "EP"
+    for i in range(co_count):
+        sheet.cell(row=summary_row + 1, column=start_col + i).value = ep
+
+    sheet.cell(row=summary_row + 2, column=label_col).value = ">=EP"
+    for i in range(co_count):
+        col = get_column_letter(start_col + i)
+        ep_col = get_column_letter(start_col + i)
+        sheet.cell(row=summary_row + 2, column=start_col + i).value = (
+            f'=COUNTIF({col}6:{col}{last_student},">="&{ep_col}{summary_row + 1})'
+        )
+
+    sheet.cell(row=summary_row + 3, column=label_col).value = "Actual Attainment"
+    for i in range(co_count):
+        c_cell = f"{get_column_letter(start_col + i)}{summary_row + 2}"
+        t_cell = f"{get_column_letter(start_col + i)}{summary_row}"
+        cell = sheet.cell(row=summary_row + 3, column=start_col + i)
+        cell.value = f'=IFERROR(({c_cell}/{t_cell})*100, 0)'
+        cell.number_format = "0.00"
+        
+    ela_row = summary_row + 5
+    rel_row = ela_row + 1
+
+    sheet.cell(row=ela_row, column=label_col).value = "ELA"
+    sheet.cell(row=rel_row, column=label_col).value = "Relative Attainment (%)"
+
+    for i in range(co_count):
+        sheet.cell(row=ela_row, column=start_col + i).value = ela_values[i]
+        actual_cell = f"{get_column_letter(start_col + i)}{summary_row + 3}"
+        ela_cell = f"{get_column_letter(start_col + i)}{ela_row}"
+        
+        cell = sheet.cell(row=rel_row, column=start_col + i)
+        cell.value = f'=IFERROR(MIN(({actual_cell}/{ela_cell})*100, 100), 0)'
+        cell.number_format = "0.00"
+        cell.alignment = Alignment(horizontal="center")
+
 
 # ---------------------------------------------------------------------------
 # New CAMU Terminal Parsing
@@ -154,23 +198,31 @@ def _extract_co_from_header(header_value):
 def parse_terminal_camu(term_ws):
     """
     Parse the new CAMU terminal marks Excel worksheet.
-
-    Terminal CAMU layout (openpyxl 1-indexed):
-      Row 1 : Question number codes (cols G+)
-      Row 2 : "Ques No X - COY" CO-tagged headers (cols G+)
-      Row 3 : Max marks per question column (cols G+)
-      Row 4 : blank row
-      Row 5+: Student data  col A=RegNo, col B=Name, col G+=per-question marks
-
-    Returns:
-        col_co     : list[str|None]   — CO tag per question column (None if untagged)
-        col_max    : list[float]      — max marks per question column
-        student_co_pct : dict[str, dict[str, float]]
-                     RegNo  →  {CO1: pct, CO2: pct, …}
-                     Percentage = (sum obtained) / (sum max) * 100 per CO
-        ordered_cos : list[str]       — CO names in order of first appearance
     """
     marks_start_col = TERM_MARKS_START_COL
+
+    # Find student start row dynamically
+    student_start = 5
+    for r in range(3, term_ws.max_row + 1):
+        val = term_ws.cell(row=r, column=1).value
+        if val is not None and re.match(r"^\d+", str(val).strip()):
+            student_start = r
+            break
+
+    # Dynamically find max marks row and CO headers row by scanning up from student_start
+    row_max_marks = 3
+    for r in range(student_start - 1, 0, -1):
+        val = term_ws.cell(row=r, column=marks_start_col).value
+        if val is not None and parse_float(val, -1.0) >= 0:
+            row_max_marks = r
+            break
+
+    row_co_headers = 2
+    for r in range(row_max_marks - 1, 0, -1):
+        val = term_ws.cell(row=r, column=marks_start_col).value
+        if _extract_co_from_header(val):
+            row_co_headers = r
+            break
 
     # ---- Step 1: Read per-column CO tag and max mark ----
     col_co  = []
@@ -178,8 +230,8 @@ def parse_terminal_camu(term_ws):
 
     col = marks_start_col
     while col <= term_ws.max_column:
-        header_val = term_ws.cell(row=TERM_ROW_CO_HEADERS, column=col).value
-        max_val    = term_ws.cell(row=TERM_ROW_MAX_MARKS,  column=col).value
+        header_val = term_ws.cell(row=row_co_headers, column=col).value
+        max_val    = term_ws.cell(row=row_max_marks,  column=col).value
 
         co_tag = _extract_co_from_header(header_val)
 
@@ -207,7 +259,7 @@ def parse_terminal_camu(term_ws):
         if co and co not in ordered_cos:
             ordered_cos.append(co)
 
-    for row in range(TERM_STUDENT_START, term_ws.max_row + 1):
+    for row in range(student_start, term_ws.max_row + 1):
         reg_val = term_ws.cell(row=row, column=1).value
         reg_str = str(reg_val).strip() if reg_val is not None else ""
         if not reg_str or reg_str.lower() in ("nan", "none"):
@@ -314,30 +366,36 @@ def main():
         if not student_rows:
             raise ValueError("No student rows found in Sheet1")
 
-        last_student = student_rows[-1]
+        last_student = student_rows[-1] - 2  # Adjusted for Sheet2
 
         # ---- Step A: Copy identity columns (A, B, C) ----
-        for row in student_rows:
-            sheet2.cell(row=row, column=1).value = sheet1.cell(row=row, column=1).value
-            sheet2.cell(row=row, column=2).value = sheet1.cell(row=row, column=2).value
-            sheet2.cell(row=row, column=3).value = sheet1.cell(row=row, column=3).value
+        sheet2["A3"] = "S.No"
+        sheet2["B3"] = "REGNO"
+        sheet2["C3"] = "Student Name"
 
-            sheet2.cell(row=row, column=1).alignment = Alignment(horizontal="center")
-            sheet2.cell(row=row, column=2).alignment = Alignment(horizontal="center")
-            sheet2.cell(row=row, column=3).alignment = Alignment(horizontal="left")
+        for row in student_rows:
+            dest_row = row - 2
+            sheet2.cell(row=dest_row, column=1).value = sheet1.cell(row=row, column=1).value
+            sheet2.cell(row=dest_row, column=2).value = sheet1.cell(row=row, column=2).value
+            sheet2.cell(row=dest_row, column=3).value = sheet1.cell(row=row, column=3).value
+
+            sheet2.cell(row=dest_row, column=1).alignment = Alignment(horizontal="center")
+            sheet2.cell(row=dest_row, column=2).alignment = Alignment(horizontal="center")
+            sheet2.cell(row=dest_row, column=3).alignment = Alignment(horizontal="left")
 
         # ---- Step B: Internal % section (columns E–J) ----
-        sheet2.merge_cells("E3:J3")
-        sheet2["E3"] = "CO BASED Percentage of marks (Internal Assessment only)"
-        sheet2["E3"].alignment = Alignment(horizontal="center", vertical="center")
+        sheet2.merge_cells("E2:J2")
+        sheet2["E2"] = "CO BASED Percentage of marks (Internal Assessment only)"
+        sheet2["E2"].alignment = Alignment(horizontal="center", vertical="center")
 
         for i in range(co_count):
-            sheet2.cell(row=5, column=5 + i).value = f"CO{i + 1}"
+            sheet2.cell(row=3, column=5 + i).value = f"CO{i + 1}"
 
         for row in student_rows:
+            dest_row = row - 2
             for i in range(co_count):
                 src = sheet1.cell(row=row, column=src_start + i)
-                dst = sheet2.cell(row=row, column=dst_start + i)
+                dst = sheet2.cell(row=dest_row, column=dst_start + i)
 
                 if src.data_type == "f":
                     dst.value = rewrite_formula(src.value)
@@ -348,12 +406,12 @@ def main():
                 dst.alignment = Alignment(horizontal="center")
 
         # ---- Step C: Terminal section (columns L–Q) ----
-        sheet2.merge_cells("L3:Q3")
+        sheet2.merge_cells("L2:Q2")
         if phase == "end":
-            sheet2["L3"] = "Terminal Assessment"
+            sheet2["L2"] = "Terminal Assessment"
         else:
-            sheet2["L3"] = "Terminal Assessment (Not available in this phase)"
-        sheet2["L3"].alignment = Alignment(horizontal="center", vertical="center")
+            sheet2["L2"] = "Terminal Assessment (Not available in this phase)"
+        sheet2["L2"].alignment = Alignment(horizontal="center", vertical="center")
 
         for i in range(co_count):
             co_name = f"CO{i + 1}"
@@ -362,93 +420,55 @@ def main():
                 header = co_name if co_name in ordered_cos_term else co_name
             else:
                 header = co_name
-            sheet2.cell(row=5, column=12 + i).value = header
+            sheet2.cell(row=3, column=12 + i).value = header
 
         if phase == "end":
             # Write per-student CO percentages from the new CAMU terminal format
             for row in student_rows:
+                dest_row = row - 2
                 # Get the student's RegNo from Sheet1 (col B = column 2)
                 regno = str(sheet1.cell(row=row, column=2).value or "").strip()
                 for i in range(co_count):
                     co_name = f"CO{i + 1}"
                     pct_val = get_terminal_co_value(student_co_pct, regno, co_name)
-                    cell = sheet2.cell(row=row, column=12 + i)
+                    cell = sheet2.cell(row=dest_row, column=12 + i)
                     cell.value = round(pct_val, 4)
                     cell.number_format = "0.00"
                     cell.alignment = Alignment(horizontal="center")
         else:
             for row in student_rows:
+                dest_row = row - 2
                 for i in range(co_count):
-                    sheet2.cell(row=row, column=12 + i).value = 0
+                    sheet2.cell(row=dest_row, column=12 + i).value = 0
 
         # ---- Step D: Final CO headers (columns S–X) ----
         for i in range(co_count):
-            sheet2.cell(row=5, column=19 + i).value = f"CO{i + 1}"
+            sheet2.cell(row=3, column=19 + i).value = f"CO{i + 1}"
 
         # ---- Step E: Phase-aware final CO formula ----
         for row in student_rows:
+            dest_row = row - 2
             for i in range(co_count):
                 e_col    = get_column_letter(5 + i)
                 l_col    = get_column_letter(12 + i)
                 dest_col = 19 + i
 
-                cell = sheet2.cell(row=row, column=dest_col)
+                cell = sheet2.cell(row=dest_row, column=dest_col)
                 if phase == "end":
                     # 60% internal + 40% terminal
-                    cell.value = f"=0.6*{e_col}{row}+0.4*{l_col}{row}"
+                    cell.value = f"=0.6*{e_col}{dest_row}+0.4*{l_col}{dest_row}"
                 else:
                     # Interim phases: internal-only attainment
-                    cell.value = f"={e_col}{row}"
+                    cell.value = f"={e_col}{dest_row}"
                 cell.number_format = "0.00"
+                cell.alignment = Alignment(horizontal="center")
 
         # ---- Step F: Attainment summary rows ----
         summary_row = last_student + 3
-
-        sheet2.cell(row=summary_row, column=18).value = "Total"
-        for i in range(co_count):
-            col = get_column_letter(19 + i)
-            sheet2.cell(row=summary_row, column=19 + i).value = (
-                f"=COUNT({col}8:{col}{last_student})"
-            )
-
-        sheet2.cell(row=summary_row + 1, column=18).value = "EP"
-        for i in range(co_count):
-            sheet2.cell(row=summary_row + 1, column=19 + i).value = ep
-
-        sheet2.cell(row=summary_row + 2, column=18).value = ">=EP"
-        for i in range(co_count):
-            col = get_column_letter(19 + i)
-            sheet2.cell(row=summary_row + 2, column=19 + i).value = (
-                f'=COUNTIF({col}8:{col}{last_student},">="&{get_column_letter(19 + i)}{summary_row + 1})'
-            )
-
-        sheet2.cell(row=summary_row + 3, column=18).value = "Actual Atta"
-        for i in range(co_count):
-            c_cell = f"{get_column_letter(19 + i)}{summary_row + 2}"
-            t_cell = f"{get_column_letter(19 + i)}{summary_row}"
-            cell = sheet2.cell(row=summary_row + 3, column=19 + i)
-            cell.value = f"=IFERROR(({c_cell}/{t_cell})*100, 0)"
-            cell.number_format = "0.00"
-
-        # ---- Step G: ELA and Relative Attainment ----
-        ela_row = summary_row + 5
-        rel_row = ela_row + 1
-
-        sheet2.cell(row=ela_row, column=18).value = "ELA"
-        sheet2.cell(row=rel_row, column=18).value = "Relative Attainment (%)"
-
         ela_values = [parse_float(ela.get(f"CO{i + 1}"), 0) for i in range(co_count)]
 
-        for i in range(co_count):
-            sheet2.cell(row=ela_row, column=19 + i).value = ela_values[i]
-
-            actual_cell = f"{get_column_letter(19 + i)}{summary_row + 3}"
-            ela_cell    = f"{get_column_letter(19 + i)}{ela_row}"
-
-            cell = sheet2.cell(row=rel_row, column=19 + i)
-            cell.value = f"=IFERROR(MIN(({actual_cell}/{ela_cell})*100, 100), 0)"
-            cell.number_format = "0.00"
-            cell.alignment = Alignment(horizontal="center")
+        # Final CO Attainment summary block
+        write_summary_block(sheet2, summary_row, 18, 19, co_count, last_student, ep, ela_values)
 
         # ---- Step H: Early intervention sheet for interim phases ----
         generate_feedback_sheet(
@@ -460,6 +480,8 @@ def main():
             internal_start_col=5,
             co_count=co_count,
         )
+        if phase == "end" and "Feedback" in wb.sheetnames:
+            del wb["Feedback"]
 
         wb.save(output_path)
         print(json.dumps({"status": "ok", "output_path": output_path}))
