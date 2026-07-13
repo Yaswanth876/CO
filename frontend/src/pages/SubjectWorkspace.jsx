@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check } from "lucide-react";
@@ -50,6 +50,12 @@ export default function SubjectWorkspace({ user }) {
   
   const [generatingStage, setGeneratingStage] = useState("");
   const [clearingProcess, setClearingProcess] = useState(false);
+
+  const messageRef = useCallback((node) => {
+    if (node !== null) {
+      node.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, []);
 
   const { subjectCode } = useParams();
   const resolvedSubjectCode = subjectCode || "SUBJECT";
@@ -270,6 +276,7 @@ export default function SubjectWorkspace({ user }) {
         <AnimatePresence>
           {saveMessage && (
             <motion.div
+              ref={messageRef}
               initial={{ opacity: 0, y: -10, height: 0 }}
               animate={{ opacity: 1, y: 0, height: "auto" }}
               exit={{ opacity: 0, y: -10, height: 0 }}
