@@ -264,6 +264,19 @@ export default function ParameterSection({
                   </div>
                 )}
 
+                {hideGenerateButton && (
+                  <div className="pt-2 pb-3">
+                    <button
+                      type="button"
+                      className="btn-press inline-flex items-center gap-2 rounded-md bg-[#6f1d1b] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#571715] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6f1d1b]/40 disabled:opacity-50"
+                      onClick={handleContinue}
+                      disabled={!isValid}
+                    >
+                      Save Parameters
+                    </button>
+                  </div>
+                )}
+
               </CardContent>
             </motion.div>
           )}

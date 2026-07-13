@@ -79,16 +79,21 @@ router.post('/early-sem', async (req, res, next) => {
 
     const config = await Configuration.findOne({ where: { subject_id } });
     const ela = {
-      CO1: parseFloat(config?.ela_co1) || 75, CO2: parseFloat(config?.ela_co2) || 75,
-      CO3: parseFloat(config?.ela_co3) || 70, CO4: parseFloat(config?.ela_co4) || 85,
-      CO5: parseFloat(config?.ela_co5) || 80, CO6: parseFloat(config?.ela_co6) || 78
+      CO1: config?.ela_co1 !== undefined && config?.ela_co1 !== null ? parseFloat(config.ela_co1) : 75,
+      CO2: config?.ela_co2 !== undefined && config?.ela_co2 !== null ? parseFloat(config.ela_co2) : 75,
+      CO3: config?.ela_co3 !== undefined && config?.ela_co3 !== null ? parseFloat(config.ela_co3) : 70,
+      CO4: config?.ela_co4 !== undefined && config?.ela_co4 !== null ? parseFloat(config.ela_co4) : 85,
+      CO5: config?.ela_co5 !== undefined && config?.ela_co5 !== null ? parseFloat(config.ela_co5) : 80,
+      CO6: config?.ela_co6 !== undefined && config?.ela_co6 !== null ? parseFloat(config.ela_co6) : 78
     };
 
     const stage4Result = await runStage4({
       phase: 'early',
       coAttainmentPath: stage3Path,
       outputPath: reportPath,
-      ep: config?.ep || 80, constraint: config?.constraint_value || 79.99, ela
+      ep: config?.ep !== undefined && config?.ep !== null ? parseFloat(config.ep) : 80,
+      constraint: config?.constraint_value !== undefined && config?.constraint_value !== null ? parseFloat(config.constraint_value) : 79.99,
+      ela
     });
 
     if (stage4Result.status !== 'ok') throw new Error(stage4Result.message);
@@ -149,16 +154,21 @@ router.post('/mid-sem', async (req, res, next) => {
 
     const config = await Configuration.findOne({ where: { subject_id } });
     const ela = {
-      CO1: parseFloat(config?.ela_co1) || 75, CO2: parseFloat(config?.ela_co2) || 75,
-      CO3: parseFloat(config?.ela_co3) || 70, CO4: parseFloat(config?.ela_co4) || 85,
-      CO5: parseFloat(config?.ela_co5) || 80, CO6: parseFloat(config?.ela_co6) || 78
+      CO1: config?.ela_co1 !== undefined && config?.ela_co1 !== null ? parseFloat(config.ela_co1) : 75,
+      CO2: config?.ela_co2 !== undefined && config?.ela_co2 !== null ? parseFloat(config.ela_co2) : 75,
+      CO3: config?.ela_co3 !== undefined && config?.ela_co3 !== null ? parseFloat(config.ela_co3) : 70,
+      CO4: config?.ela_co4 !== undefined && config?.ela_co4 !== null ? parseFloat(config.ela_co4) : 85,
+      CO5: config?.ela_co5 !== undefined && config?.ela_co5 !== null ? parseFloat(config.ela_co5) : 80,
+      CO6: config?.ela_co6 !== undefined && config?.ela_co6 !== null ? parseFloat(config.ela_co6) : 78
     };
 
     const stage4Result = await runStage4({
       phase: 'mid',
       coAttainmentPath: stage3Path,
       outputPath: reportPath,
-      ep: config?.ep || 80, constraint: config?.constraint_value || 79.99, ela
+      ep: config?.ep !== undefined && config?.ep !== null ? parseFloat(config.ep) : 80,
+      constraint: config?.constraint_value !== undefined && config?.constraint_value !== null ? parseFloat(config.constraint_value) : 79.99,
+      ela
     });
 
     if (stage4Result.status !== 'ok') throw new Error(stage4Result.message);
@@ -214,9 +224,12 @@ router.post('/terminal', async (req, res, next) => {
 
     const config = await Configuration.findOne({ where: { subject_id } });
     const ela = {
-      CO1: parseFloat(config?.ela_co1) || 75, CO2: parseFloat(config?.ela_co2) || 75,
-      CO3: parseFloat(config?.ela_co3) || 70, CO4: parseFloat(config?.ela_co4) || 85,
-      CO5: parseFloat(config?.ela_co5) || 80, CO6: parseFloat(config?.ela_co6) || 78
+      CO1: config?.ela_co1 !== undefined && config?.ela_co1 !== null ? parseFloat(config.ela_co1) : 75,
+      CO2: config?.ela_co2 !== undefined && config?.ela_co2 !== null ? parseFloat(config.ela_co2) : 75,
+      CO3: config?.ela_co3 !== undefined && config?.ela_co3 !== null ? parseFloat(config.ela_co3) : 70,
+      CO4: config?.ela_co4 !== undefined && config?.ela_co4 !== null ? parseFloat(config.ela_co4) : 85,
+      CO5: config?.ela_co5 !== undefined && config?.ela_co5 !== null ? parseFloat(config.ela_co5) : 80,
+      CO6: config?.ela_co6 !== undefined && config?.ela_co6 !== null ? parseFloat(config.ela_co6) : 78
     };
 
     const stage4Result = await runStage4({
@@ -224,7 +237,9 @@ router.post('/terminal', async (req, res, next) => {
       coAttainmentPath: stage3Path,
       terminalPath: terminal.file_path,
       outputPath: reportPath,
-      ep: config?.ep || 80, constraint: config?.constraint_value || 79.99, ela
+      ep: config?.ep !== undefined && config?.ep !== null ? parseFloat(config.ep) : 80,
+      constraint: config?.constraint_value !== undefined && config?.constraint_value !== null ? parseFloat(config.constraint_value) : 79.99,
+      ela
     });
 
     if (stage4Result.status !== 'ok') throw new Error(stage4Result.message);
