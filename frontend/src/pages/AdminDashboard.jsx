@@ -595,7 +595,11 @@ export default function AdminDashboard() {
                               variant="outline"
                               size="sm"
                               onClick={() => {
-                                setCourseForm(c);
+                                setCourseForm({
+                                  ...c,
+                                  course_code: c.subject_code,
+                                  course_name: c.subject_name
+                                });
                                 setShowCourseModal(true);
                               }}
                             >
